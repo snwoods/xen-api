@@ -7875,3 +7875,9 @@ module VTPM = struct
     let ref = Client.VTPM.get_by_uuid ~rpc ~session_id ~uuid in
     Client.VTPM.destroy ~rpc ~session_id ~self:ref
 end
+
+let host_price_of printer rpc session_id params =
+  let host = Client.Host.get_by_uuid rpc session_id (List.assoc "host-uuid" params) in
+  let item = List.assoc "item" params in
+  let price = string_of_float (Client.Host.price_of ~rpc ~session_id ~host ~item) in
+  printer (Cli_printer.PList [price])

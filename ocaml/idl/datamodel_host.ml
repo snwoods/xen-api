@@ -1744,6 +1744,18 @@ let set_https_only =
       ]
     ~allowed_roles:_R_POOL_OP ()
 
+let host_price_of =
+  call ~flags:[`Session]
+    ~name:"price_of"
+    ~in_oss_since:None
+    ~in_product_since:rel_orlando
+    ~params:[(Ref _host, "host", "The host containing the price information");
+             (String, "item", "The item whose price is queried")]
+    ~result:(Float, "The price of the item")
+    ~doc:"Returns the price of a named item."
+    ~allowed_roles:_R_POOL_OP
+    ()
+
 (** Hosts *)
 let t =
   create_obj ~in_db:true ~in_product_since:rel_rio ~in_oss_since:oss_since_303
@@ -1878,6 +1890,7 @@ let t =
       ; apply_updates
       ; copy_primary_host_certs
       ; set_https_only
+      ; host_price_of
       ]
     ~contents:
       ([

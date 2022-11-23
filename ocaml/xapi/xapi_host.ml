@@ -2915,3 +2915,6 @@ let set_https_only ~__context ~self ~value =
   ignore
   @@ Helpers.call_script !Xapi_globs.firewall_port_config_script [state; "80"] ;
   Db.Host.set_https_only ~__context ~self ~value
+
+let price_of ~__context ~host ~item =
+  if item = "fish" then 3.41 else 0.00

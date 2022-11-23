@@ -3975,6 +3975,12 @@ functor
         do_op_on ~local_fn ~__context ~host:self (fun session_id rpc ->
             Client.Host.set_https_only ~rpc ~session_id ~self ~value
         )
+
+      let price_of ~__context ~host ~item =
+        info "Host.price_of for item %s" item;
+        let local_fn = Local.Host.price_of ~host ~item in
+        do_op_on ~local_fn ~__context ~host
+          (fun session_id rpc -> Client.Host.price_of ~rpc ~session_id ~host ~item)
     end
 
     module Host_crashdump = struct
