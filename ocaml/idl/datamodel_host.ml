@@ -1747,8 +1747,7 @@ let set_https_only =
 let host_price_of =
   call ~flags:[`Session]
     ~name:"price_of"
-    ~in_oss_since:None
-    ~in_product_since:rel_orlando
+    ~lifecycle:[]
     ~params:[(Ref _host, "host", "The host containing the price information");
              (String, "item", "The item whose price is queried")]
     ~result:(Float, "The price of the item")

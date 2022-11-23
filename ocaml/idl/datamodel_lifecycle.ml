@@ -37,6 +37,8 @@ let prototyped_of_message = function
       Some "22.26.0"
   | "VTPM", "create" ->
       Some "22.26.0"
+  | "host", "price_of" ->
+      Some "22.31.0-next"
   | "host", "set_https_only" ->
       Some "22.27.0"
   | "pool", "set_https_only" ->
