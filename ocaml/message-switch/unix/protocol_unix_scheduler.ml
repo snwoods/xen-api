@@ -74,11 +74,13 @@ module Delay = struct
                 pipe_out
             )
           in
-          let r, _, _ = Unix.select [pipe_out] [] [] seconds in
+          Unix.setsockopt_float pipe_out Unix.SO_RCVTIMEO seconds ;
           (* flush the single byte from the pipe *)
-          if r <> [] then ignore (Unix.read pipe_out (Bytes.create 1) 0 1) ;
           (* return true if we waited the full length of time, false if we were woken *)
-          r = []
+          try (Unix.read pipe_out (Bytes.create 1) 0 1) ;
+            false
+          with Unix.Unix_error (Unix.EAGAIN, _, _) ->
+            true
         with Pre_signalled -> false
       )
       (fun () ->
