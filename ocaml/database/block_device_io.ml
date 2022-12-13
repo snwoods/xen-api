@@ -326,12 +326,11 @@ let accept_conn s latest_response_time =
   let now = Unix.gettimeofday () in
   let timeout = latest_response_time -. now in
   (* Await an incoming connection... *)
-  let ready_to_read, _, _ = Unix.select [s] [] [] timeout in
-  R.debug "Finished selecting" ;
-  if List.mem s ready_to_read then
-    (* We've received a connection. Accept it and return the socket. *)
+  Unix.setsockopt_float s Unix.SO_RCVTIMEO timeout ;
+  (* How do we wait until the socket is ready for accepting? *)
+  try
     fst (Unix.accept s)
-  else (* We must have timed out *)
+  with  Unix.Unix_error (Unix.EAGAIN, _, _) ->
     raise Unixext.Timeout
 
 (* Listen on a given socket. Accept a single connection and transfer all the data from it to dest_fd, or raise Timeout if target_response_time happens first. *)
