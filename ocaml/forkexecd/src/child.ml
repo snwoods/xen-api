@@ -60,27 +60,35 @@ let handle_comms_sock comms_sock state =
 
 let handle_comms_no_fd_sock2 comms_sock fd_sock state =
   debug "Selecting in handle_comms_no_fd_sock2" ;
-  let ready, _, _ = Unix.select [comms_sock; fd_sock] [] [] (-1.0) in
-  debug "Done" ;
-  if List.mem fd_sock ready then (
-    debug "fd sock" ;
-    let fd_sock2, _ = Unix.accept fd_sock in
-    {state with fd_sock2= Some fd_sock2}
-  ) else (
-    debug "comms sock" ;
-    handle_comms_sock comms_sock state
+  let epoll = Polly.create () in
+  List.iter (fun fd -> Polly.add epoll fd Polly.Events.inp) [comms_sock; fd_sock] ;
+  ignore
+  @@ Polly.wait epoll 2 (-1) (fun _ fd _ ->
+    debug "Done" ;
+    if fd_sock = fd then (
+      debug "fd sock" ;
+      let fd_sock2, _ = Unix.accept fd_sock in
+      {state with fd_sock2= Some fd_sock2}
+    ) else (
+      debug "comms sock" ;
+      handle_comms_sock comms_sock state
+    )
   )
 
 let handle_comms_with_fd_sock2 comms_sock _fd_sock fd_sock2 state =
   debug "Selecting in handle_comms_with_fd_sock2" ;
-  let ready, _, _ = Unix.select [comms_sock; fd_sock2] [] [] (-1.0) in
-  debug "Done" ;
-  if List.mem fd_sock2 ready then (
-    debug "fd sock2" ;
-    handle_fd_sock fd_sock2 state
-  ) else (
-    debug "comms sock" ;
-    handle_comms_sock comms_sock state
+  let epoll = Polly.create () in
+  List.iter (fun fd -> Polly.add epoll fd Polly.Events.inp) [comms_sock; fd_sock2] ;
+  ignore
+  @@ Polly.wait epoll 2 (-1) (fun _ fd _ ->
+    debug "Done" ;
+    if fd_sock2 = fd then (
+      debug "fd sock2" ;
+      handle_fd_sock fd_sock2 state
+    ) else (
+      debug "comms sock" ;
+      handle_comms_sock comms_sock state
+    )
   )
 
 let handle_comms comms_sock fd_sock state =
