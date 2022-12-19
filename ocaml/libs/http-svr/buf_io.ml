@@ -85,10 +85,9 @@ let fill_buf ~buffered ic timeout =
       ic.max <- n + ic.max ;
       if n = 0 && len <> 0 then raise Eof ;
       n
-    with Unix.Unix_error (Unix.EAGAIN, _, _) ->
-      -1
-    Unix.setsockopt_float ic.fd Unix.SO_RCVTIMEO 0. ;
+    with Unix.Unix_error (Unix.EAGAIN, _, _) -> -1
   in
+  Unix.setsockopt_float ic.fd Unix.SO_RCVTIMEO 0. ;
   (* If there's no space to read, shift *)
   if ic.max = buf_size then shift ic ;
   let space_left = buf_size - ic.max in

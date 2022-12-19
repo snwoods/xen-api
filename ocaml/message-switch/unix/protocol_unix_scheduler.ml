@@ -81,7 +81,6 @@ module Delay = struct
             false
           with Unix.Unix_error (Unix.EAGAIN, _, _) ->
             true
-          Unix.setsockopt_float pipe_out Unix.SO_RCVTIMEO 0. ;
         with Pre_signalled -> false
       )
       (fun () ->

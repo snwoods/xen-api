@@ -327,11 +327,9 @@ let accept_conn s latest_response_time =
   let timeout = latest_response_time -. now in
   (* Await an incoming connection... *)
   Unix.setsockopt_float s Unix.SO_RCVTIMEO timeout ;
-  try
-    fst (Unix.accept s)
-  with  Unix.Unix_error (Unix.EAGAIN, _, _) ->
-    raise Unixext.Timeout
-  (* TODO need to set sock timeout to 0 *)
+  try fst (Unix.accept s)
+  with Unix.Unix_error (Unix.EAGAIN, _, _) -> raise Unixext.Timeout
+(* TODO need to set sock timeout to 0 *)
 
 (* Listen on a given socket. Accept a single connection and transfer all the data from it to dest_fd, or raise Timeout if target_response_time happens first. *)
 (* Raises NotEnoughSpace if the next write would exceed the available_space. *)

@@ -463,7 +463,7 @@ let main_loop ifd ofd permitted_filenames =
   marshal_protocol ofd ;
   let exit_code = ref None in
   while !exit_code = None do
-    Unix.setsockopt_float ifd Unix.SO_RCVTIMEO timeout ;
+    Unix.setsockopt_float ifd Unix.SO_RCVTIMEO 5.0 ;
     let cmd = try unmarshal ifd with e -> handle_unmarshal_failure e ifd in
     debug "Read: %s\n%!" (string_of_message cmd) ;
     Unix.setsockopt_float ifd Unix.SO_RCVTIMEO 0. ;
@@ -580,36 +580,38 @@ let main_loop ifd ofd permitted_filenames =
                   finished := true
                 else
                   let epoll = Polly.create () in
-                  List.iter (fun fd -> Polly.add epoll fd Polly.Events.inp) [Unix.stdin; fd] ;
+                  List.iter
+                    (fun fd -> Polly.add epoll fd Polly.Events.inp)
+                    [Unix.stdin; fd] ;
                   ignore
-                  @@ Polly.wait epoll 2 heartbeat_interval (fun _ file_desc _ ->
-                    let now = Unix.time () in
-                    if now -. !last_heartbeat >= heartbeat_interval then (
-                      heartbeat_fun () ;
-                      last_heartbeat := now
-                    ) ;
-                    if Unix.stdin = file_desc then (
-                      let b =
-                        Unix.read Unix.stdin buf_remote !buf_remote_end
-                          (block - !buf_remote_end)
-                      in
-                      let i = ref !buf_remote_end in
-                      while
-                        !i < !buf_remote_end + b
-                        && Char.code (Bytes.get buf_remote !i) <> 0x1d
-                      do
-                        incr i
-                      done ;
-                      if !i < !buf_remote_end + b then final := true ;
-                      buf_remote_end := !i
-                    ) ;
-                    if fd = file_desc then
-                      let b =
-                        Unix.read fd buf_local !buf_local_end
-                          (block - !buf_local_end)
-                      in
-                      buf_local_end := !buf_local_end + b
-                  )
+                  @@ Polly.wait epoll 2 (int_of_float heartbeat_interval) (fun _ file_desc _ ->
+                         let now = Unix.time () in
+                         if now -. !last_heartbeat >= heartbeat_interval then (
+                           heartbeat_fun () ;
+                           last_heartbeat := now
+                         ) ;
+                         if Unix.stdin = file_desc then (
+                           let b =
+                             Unix.read Unix.stdin buf_remote !buf_remote_end
+                               (block - !buf_remote_end)
+                           in
+                           let i = ref !buf_remote_end in
+                           while
+                             !i < !buf_remote_end + b
+                             && Char.code (Bytes.get buf_remote !i) <> 0x1d
+                           do
+                             incr i
+                           done ;
+                           if !i < !buf_remote_end + b then final := true ;
+                           buf_remote_end := !i
+                         ) ;
+                         if fd = file_desc then
+                           let b =
+                             Unix.read fd buf_local !buf_local_end
+                               (block - !buf_local_end)
+                           in
+                           buf_local_end := !buf_local_end + b
+                     )
               done ;
               marshal ofd (Response OK)
           | 404 ->

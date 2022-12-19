@@ -65,15 +65,15 @@ let proxy (ain : Unix.file_descr) (aout : Unix.file_descr) (bin : Unixfd.t)
       List.iter (fun fd -> Polly.add epoll fd Polly.Events.out) w ;
       ignore
       @@ Polly.wait epoll 4 (-1) (fun _ fd _ ->
-        if aout = fd then
-          write_from b' a'
-        else if bout = fd then
-          write_from a' b'
-        else if ain = fd then
-          read_into a'
-        else
-          read_into b'
-      )
+             if aout = fd then
+               write_from b' a'
+             else if bout = fd then
+               write_from a' b'
+             else if ain = fd then
+               read_into a'
+             else
+               read_into b'
+         )
     done
   with _ -> (
     (try Unix.clear_nonblock ain with _ -> ()) ;
