@@ -81,15 +81,20 @@ let proxy (a : Unix.file_descr) (b : Unix.file_descr) =
       (* If we can't make any progress (because fds have been closed), then stop *)
       if r = [] && w = [] then raise End_of_file ;
       let epoll = Polly.create () in
-      List.iter (fun fd -> Polly.add epoll fd Polly.Events.inp) (r @ w) ;
+      List.iter (fun fd -> Polly.add epoll fd Polly.Events.inp) r ;
+      List.iter (fun fd -> Polly.add epoll fd Polly.Events.out) w ;
       ignore
-      @@ Polly.wait epoll 4 (-1) (fun _ fd _ ->
-        if a = fd then
-          CBuf.write b' a
-          CBuf.read a' a
+      @@ Polly.wait epoll 4 (-1) (fun _ fd event ->
+        if event = Polly.Events.inp then
+          if a = fd then
+            CBuf.read a' a
+          else
+            CBuf.read b' b
         else
-          CBuf.write a' b
-          CBuf.read b' b
+          if a = fd then
+            CBuf.write b' a
+          else
+            CBuf.write a' b
       )
       (* If there's nothing else to read or write then signal the other end *)
       List.iter

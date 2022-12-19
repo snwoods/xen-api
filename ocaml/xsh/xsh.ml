@@ -61,7 +61,8 @@ let proxy (ain : Unix.file_descr) (aout : Unix.file_descr) (bin : Unixfd.t)
         @ if can_write b' then [aout] else []
       in
       let epoll = Polly.create () in
-      List.iter (fun fd -> Polly.add epoll fd Polly.Events.inp) (r @ w) ;
+      List.iter (fun fd -> Polly.add epoll fd Polly.Events.inp) r ;
+      List.iter (fun fd -> Polly.add epoll fd Polly.Events.out) w ;
       ignore
       @@ Polly.wait epoll 4 (-1) (fun _ fd _ ->
         if aout = fd then
