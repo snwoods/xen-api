@@ -95,7 +95,7 @@ let proxy (a : Unix.file_descr) (b : Unix.file_descr) =
                CBuf.write b' a
              else
                CBuf.write a' b
-           )
+           ) ;
            (* If there's nothing else to read or write then signal the other end *)
            List.iter
            (fun (buf, fd) ->

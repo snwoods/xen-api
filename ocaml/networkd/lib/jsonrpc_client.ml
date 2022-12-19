@@ -53,7 +53,7 @@ let timeout_read fd timeout =
       debug "Timeout after read %d" (Buffer.length buf) ;
       raise Timeout
     ) ;
-    Unix.setsockopt_float fd Unix.SO_RCVTIMEO timeout ;
+    Unix.setsockopt_float fd Unix.SO_RCVTIMEO (Int64.to_float max_time) ;
     let bytes = Bytes.make 4096 '\000' in
     match Unix.read fd bytes 0 4096 with
     | 0 ->
@@ -72,7 +72,6 @@ let timeout_read fd timeout =
         Unix.Unix_error ((Unix.EAGAIN | Unix.EWOULDBLOCK | Unix.EINTR), _, _)
       ->
         inner remain_time max_bytes
-    Unix.setsockopt_float fd Unix.SO_RCVTIMEO 0. ;
   in
   inner timeout !json_rpc_max_len
 
@@ -87,7 +86,6 @@ let timeout_write filedesc total_length data response_time =
     Mtime.Span.to_uint64_ns (Mtime_clock.count write_start)
   in
   let rec inner_write offset max_time =
-    let _, ready_to_write, _ =
     let remain_time =
       let used_time = get_total_used_time () in
       Int64.sub response_time used_time
@@ -96,7 +94,7 @@ let timeout_write filedesc total_length data response_time =
       debug "Timeout to write %d at offset %d" total_length offset ;
       raise Timeout
     ) ;
-    Unix.setsockopt_float filedesc Unix.SO_SNDTIMEO timeout ;
+    Unix.setsockopt_float filedesc Unix.SO_SNDTIMEO (Int64.to_float max_time) ;
     let length = total_length - offset in
     let bytes_written =
       try Unix.single_write filedesc data offset length
