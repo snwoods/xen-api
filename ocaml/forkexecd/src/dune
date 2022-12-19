@@ -5,6 +5,7 @@
    astring
    fd-send-recv
    forkexec
+   polly
    systemd
    uuid
    xapi-log
