@@ -83,27 +83,30 @@ let proxy (a : Unix.file_descr) (b : Unix.file_descr) =
       let epoll = Polly.create () in
       List.iter (fun fd -> Polly.add epoll fd Polly.Events.inp) r ;
       List.iter (fun fd -> Polly.add epoll fd Polly.Events.out) w ;
-      ignore
-      @@ Polly.wait epoll 4 (-1)
-           (fun _ fd event ->
-             if event = Polly.Events.inp then
-               if a = fd then
-                 CBuf.read a' a
-               else
-                 CBuf.read b' b
-             else if a = fd then
-               CBuf.write b' a
-             else
-               CBuf.write a' b
-           ) ;
-           (* If there's nothing else to read or write then signal the other end *)
-           List.iter
-           (fun (buf, fd) ->
-             if CBuf.end_of_reads buf then Unix.shutdown fd Unix.SHUTDOWN_SEND ;
-             if CBuf.end_of_writes buf then
-               Unix.shutdown fd Unix.SHUTDOWN_RECEIVE
-           )
-           [(a', b); (b', a)]
+      Fun.protect
+        ~finally:(fun () -> Polly.close epoll)
+        (fun () ->
+          ignore
+          @@ Polly.wait epoll 4 (-1) (fun _ fd event ->
+                 if event = Polly.Events.inp then
+                   if a = fd then
+                     CBuf.read a' a
+                   else
+                     CBuf.read b' b
+                 else if a = fd then
+                   CBuf.write b' a
+                 else
+                   CBuf.write a' b
+             ) ;
+          (* If there's nothing else to read or write then signal the other end *)
+          List.iter
+            (fun (buf, fd) ->
+              if CBuf.end_of_reads buf then Unix.shutdown fd Unix.SHUTDOWN_SEND ;
+              if CBuf.end_of_writes buf then
+                Unix.shutdown fd Unix.SHUTDOWN_RECEIVE
+            )
+            [(a', b); (b', a)]
+        )
     done
   with _ -> (
     (try Unix.clear_nonblock a with _ -> ()) ;
@@ -168,30 +171,36 @@ let send proxy_socket =
                 List.iter
                   (fun fd -> Polly.add epoll fd Polly.Events.inp)
                   [s_ip; s_unix] ;
-                ignore
-                @@ Polly.wait epoll 2 (-1) (fun _ fd _ ->
-                       if s_unix = fd then (
-                         let fd, _peer = Unix.accept s_unix in
-                         to_close := fd :: !to_close ;
-                         let buffer = Bytes.make (String.length token) '\000' in
-                         let n =
-                           Unix.recv fd buffer 0 (Bytes.length buffer) []
-                         in
-                         let token' = Bytes.sub_string buffer 0 n in
-                         if token = token' then
-                           let (_ : int) =
-                             Fd_send_recv.send_fd_substring fd token 0
-                               (String.length token) [] proxy_socket
-                           in
-                           ()
-                       ) else if s_ip = fd then (
-                         let fd, _peer = Unix.accept s_ip in
-                         List.iter close !to_close ;
-                         to_close := fd :: !to_close ;
-                         proxy fd proxy_socket
-                       ) else
-                         assert false (* can never happen *)
-                   )
+                Fun.protect
+                  ~finally:(fun () -> Polly.close epoll)
+                  (fun () ->
+                    ignore
+                    @@ Polly.wait epoll 2 (-1) (fun _ fd _ ->
+                           if s_unix = fd then (
+                             let fd, _peer = Unix.accept s_unix in
+                             to_close := fd :: !to_close ;
+                             let buffer =
+                               Bytes.make (String.length token) '\000'
+                             in
+                             let n =
+                               Unix.recv fd buffer 0 (Bytes.length buffer) []
+                             in
+                             let token' = Bytes.sub_string buffer 0 n in
+                             if token = token' then
+                               let (_ : int) =
+                                 Fd_send_recv.send_fd_substring fd token 0
+                                   (String.length token) [] proxy_socket
+                               in
+                               ()
+                           ) else if s_ip = fd then (
+                             let fd, _peer = Unix.accept s_ip in
+                             List.iter close !to_close ;
+                             to_close := fd :: !to_close ;
+                             proxy fd proxy_socket
+                           ) else
+                             assert false (* can never happen *)
+                       )
+                  )
               )
               (fun () ->
                 List.iter close !to_close ;

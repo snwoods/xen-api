@@ -1179,29 +1179,34 @@ let raw_console_proxy sockaddr =
         List.iter
           (fun fd -> Polly.add epoll fd Polly.Events.inp)
           [Unix.stdin; fd] ;
-        ignore
-        @@ Polly.wait epoll 2 (-1) (fun _ file_desc _ ->
-               if Unix.stdin = file_desc then (
-                 let b =
-                   Unix.read Unix.stdin buf_remote !buf_remote_end
-                     (block - !buf_remote_end)
-                 in
-                 let i = ref !buf_remote_end in
-                 while
-                   !i < !buf_remote_end + b
-                   && Char.code (Bytes.get buf_remote !i) <> 0x1d
-                 do
-                   incr i
-                 done ;
-                 if !i < !buf_remote_end + b then final := true ;
-                 buf_remote_end := !i
-               ) ;
-               if fd = file_desc then
-                 let b =
-                   Unix.read fd buf_local !buf_local_end (block - !buf_local_end)
-                 in
-                 buf_local_end := !buf_local_end + b
-           )
+        Fun.protect
+          ~finally:(fun () -> Polly.close epoll)
+          (fun () ->
+            ignore
+            @@ Polly.wait epoll 2 (-1) (fun _ file_desc _ ->
+                   if Unix.stdin = file_desc then (
+                     let b =
+                       Unix.read Unix.stdin buf_remote !buf_remote_end
+                         (block - !buf_remote_end)
+                     in
+                     let i = ref !buf_remote_end in
+                     while
+                       !i < !buf_remote_end + b
+                       && Char.code (Bytes.get buf_remote !i) <> 0x1d
+                     do
+                       incr i
+                     done ;
+                     if !i < !buf_remote_end + b then final := true ;
+                     buf_remote_end := !i
+                   ) ;
+                   if fd = file_desc then
+                     let b =
+                       Unix.read fd buf_local !buf_local_end
+                         (block - !buf_local_end)
+                     in
+                     buf_local_end := !buf_local_end + b
+               )
+          )
     done
   in
   let delay = ref 0.1 in

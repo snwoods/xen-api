@@ -69,8 +69,7 @@ let timeout_read fd timeout =
           inner remain_time (max_bytes - n)
         )
     | exception
-        Unix.Unix_error ((Unix.EAGAIN | Unix.EWOULDBLOCK | Unix.EINTR), _, _)
-      ->
+        Unix.Unix_error ((Unix.EAGAIN | Unix.EWOULDBLOCK | Unix.EINTR), _, _) ->
         inner remain_time max_bytes
   in
   inner timeout !json_rpc_max_len
@@ -98,10 +97,7 @@ let timeout_write filedesc total_length data response_time =
     let length = total_length - offset in
     let bytes_written =
       try Unix.single_write filedesc data offset length
-      with
-      | Unix.Unix_error (Unix.EINTR, _, _)
-      ->
-        0
+      with Unix.Unix_error (Unix.EINTR, _, _) -> 0
     in
     let new_offset = offset + bytes_written in
     try
@@ -109,8 +105,7 @@ let timeout_write filedesc total_length data response_time =
         ()
       else
         inner_write new_offset remain_time
-    with Unix.Unix_error (Unix.EAGAIN, _, _) ->
-      inner_write offset remain_time
+    with Unix.Unix_error (Unix.EAGAIN, _, _) -> inner_write offset remain_time
   in
   inner_write 0 response_time
 
