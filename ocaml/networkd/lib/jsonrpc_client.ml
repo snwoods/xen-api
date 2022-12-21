@@ -53,7 +53,7 @@ let timeout_read fd timeout =
       debug "Timeout after read %d" (Buffer.length buf) ;
       raise Timeout
     ) ;
-    ( try Unix.(setsockopt_float fd SO_RCVTIMEO (Int64.to_float max_time))
+    ( try Unix.setsockopt_float fd SO_RCVTIMEO (Int64.to_float max_time)
       with Unix.Unix_error (Unix.ENOTSOCK, _, _) ->
         (* In the unit tests, the fd comes from a pipe... ignore *)
         ()
@@ -118,7 +118,9 @@ let with_rpc ?(version = Jsonrpc.V2) ~path ~call () =
   Open_uri.with_open_uri uri (fun s ->
       let req = Bytes.of_string (Jsonrpc.string_of_call ~version call) in
       timeout_write s (Bytes.length req) req !json_rpc_write_timeout ;
+      Unix.setsockopt_float s SO_SNDTIMEO 0. ;
       let res = timeout_read s !json_rpc_read_timeout in
+      Unix.setsockopt_float s SO_RCVTIMEO 0. ;
       debug "Response: %s" res ;
       Jsonrpc.response_of_string ~strict:false res
   )

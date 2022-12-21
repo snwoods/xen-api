@@ -79,6 +79,7 @@ module Delay = struct
           (* return true if we waited the full length of time, false if we were woken *)
           try
             ignore (Unix.read pipe_out (Bytes.create 1) 0 1) ;
+            Unix.setsockopt_float pipe_out Unix.SO_RCVTIMEO 0. ;
             false
           with Unix.Unix_error (Unix.EAGAIN, _, _) -> true
         with Pre_signalled -> false
