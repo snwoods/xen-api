@@ -53,7 +53,11 @@ let timeout_read fd timeout =
       debug "Timeout after read %d" (Buffer.length buf) ;
       raise Timeout
     ) ;
-    Unix.setsockopt_float fd Unix.SO_RCVTIMEO (Int64.to_float max_time) ;
+    ( try Unix.(setsockopt_float fd SO_RCVTIMEO (Int64.to_float max_time))
+      with Unix.Unix_error (Unix.ENOTSOCK, _, _) ->
+        (* In the unit tests, the fd comes from a pipe... ignore *)
+        ()
+    ) ;
     let bytes = Bytes.make 4096 '\000' in
     match Unix.read fd bytes 0 4096 with
     | 0 ->
