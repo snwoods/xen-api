@@ -236,7 +236,7 @@ let wait_for_clustering_ip ~__context ~(self : API.ref_Cluster_host) =
   wait_for_ip get_ip is_connected
 
 let on_dom0_networking_change ~__context =
-  debug "Checking to see if hostname or management IP has changed" ;
+  debug "Checking to see if hostname or management IP has test" ;
   Helpers.update_pif_addresses ~__context ;
   (* Need to update:
      	   1 Host.hostname
