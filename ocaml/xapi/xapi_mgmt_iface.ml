@@ -243,7 +243,10 @@ let on_dom0_networking_change ~__context =
      	   2 Host.address
      	   3. Console URIs *)
   let new_hostname = Networking_info.get_hostname () in
+  debug "New host name: %s" new_hostname ;
+  debug "Unix host name: %s" (Unix.gethostname ()) ;
   let localhost = Helpers.get_localhost ~__context in
+  debug "Localhost is: %s" (Db.Host.get_hostname ~__context ~self:localhost) ;
   if Db.Host.get_hostname ~__context ~self:localhost <> new_hostname then (
     debug "Changing Host.hostname in database to: %s" new_hostname ;
     Db.Host.set_hostname ~__context ~self:localhost ~value:new_hostname
