@@ -392,6 +392,7 @@ let bring_up_management_if ~__context () =
     ) ;
     (* Start the Host Internal Management Network, if needed. *)
     Xapi_network.check_himn ~__context ;
+    debug "xapi bring_up_management_if update_getty" ;
     Helpers.update_getty ()
   with e ->
     debug "Caught exception bringing up management interface: %s"

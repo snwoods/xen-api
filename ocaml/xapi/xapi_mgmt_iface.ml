@@ -92,6 +92,7 @@ end = struct
          database this can fail... this is ok because the database will be synchronised later *)
       Server_helpers.exec_with_new_task "refreshing consoles" (fun __context ->
           Dbsync_master.set_master_ip ~__context ;
+          debug "xapi_mgmt_iface start update_getty" ;
           Helpers.update_getty () ;
           Dbsync_master.refresh_console_urls ~__context
       )
@@ -263,8 +264,10 @@ let on_dom0_networking_change ~__context =
          xapi's startup (see CA-242706) *)
       if Db.Host.get_address ~__context ~self:localhost <> ip then (
         debug "Changing Host.address in database to: %s" ip ;
+        debug "xapi_mgmt_iface1 set_address: %s" ip ;
         Db.Host.set_address ~__context ~self:localhost ~value:ip ;
         debug "Refreshing console URIs" ;
+        debug "xapi_mgmt_iface on_dom0_networking1 update_getty" ;
         Helpers.update_getty () ;
         Dbsync_master.refresh_console_urls ~__context
       )
@@ -273,7 +276,9 @@ let on_dom0_networking_change ~__context =
         debug
           "Changing Host.address in database to: '' (host has no management IP \
            address)" ;
+        debug "xapi_mgmt_iface on_dom0_networking2 update_getty" ;
         Helpers.update_getty () ;
+        debug "xapi_mgmt_iface2 set_address: %s" "" ;
         Db.Host.set_address ~__context ~self:localhost ~value:""
       )
   ) ;

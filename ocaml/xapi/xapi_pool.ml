@@ -2142,6 +2142,7 @@ let hello ~__context ~host_uuid ~host_address =
       in
       if host_address <> slave_current_address then (
         (* update slave address in master db because we know its changed *)
+        debug "xapi_pool set_address: %s" host_address ;
         Db.Host.set_address ~__context ~self:host_ref ~value:host_address ;
         (* and refresh console URLs to reflect this change of address *)
         Dbsync_master.refresh_console_urls ~__context

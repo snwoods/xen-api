@@ -61,6 +61,7 @@ let set_master_ip ~__context =
         ""
   in
   let host = Helpers.get_localhost ~__context in
+  debug "dbsync_master set_address: %s" ip ;
   Db.Host.set_address ~__context ~self:host ~value:ip
 
 (* NB the master doesn't use the heartbeat mechanism to track its own liveness so we

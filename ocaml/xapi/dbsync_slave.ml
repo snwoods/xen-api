@@ -103,6 +103,7 @@ let refresh_localhost_info ~__context info =
         String.split ' ' capabilities
   in
   Db.Host.set_capabilities ~__context ~self:host ~value:caps ;
+  debug "dbsync_slave set_address: %s" (get_my_ip_addr ~__context) ;
   Db.Host.set_address ~__context ~self:host ~value:(get_my_ip_addr ~__context) ;
   let boot_time_key = "boot_time" in
   let boot_time_value = string_of_float (Date.to_float (get_start_time ())) in
