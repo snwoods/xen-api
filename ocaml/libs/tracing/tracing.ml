@@ -665,6 +665,22 @@ module Export = struct
           write fd json ;
           if (Unix.fstat fd).st_size >= !max_file_size then (
             debug "Tracing: Rotating file %s > %d" file_name !max_file_size ;
+            ( match
+              Forkhelpers.with_logfile_fd "tracing-zstd" (fun log_fd ->
+                  let pid =
+                    Forkhelpers.safe_close_and_exec None None (Some log_fd) []
+                      "/usr/bin/zstd"
+                      ["--fast"; "--rm"; "-f"; file_name]
+                  in
+                  Forkhelpers.waitpid_fail_if_bad_exit pid
+              )
+            with
+            | Success _ ->
+                debug "Compression succeeded"
+            | Failure (log, exn) ->
+                debug "Compression failed, output: %s" log ;
+                raise exn
+            ) ;
             ignore @@ new_file_name ()
           ) ;
           Ok ()
