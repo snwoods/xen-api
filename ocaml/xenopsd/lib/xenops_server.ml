@@ -4097,6 +4097,12 @@ module Observer = struct
     Debug.with_thread_associated dbg
       (fun () -> Tracing.Export.set_host_id host_id)
       ()
+
+  let set_compress_tracing_files _ dbg enabled =
+    debug "Observer.set_compress_tracing_files : dbg=%s" dbg ;
+    Debug.with_thread_associated dbg
+      (fun () -> Tracing.Export.Destination.File.set_compress_tracing_files enabled)
+      ()
 end
 
 let get_diagnostics _ _ () =
@@ -4204,3 +4210,4 @@ let _ =
   Server.Observer.set_max_traces (Observer.set_max_traces ()) ;
   Server.Observer.set_max_file_size (Observer.set_max_file_size ()) ;
   Server.Observer.set_host_id (Observer.set_host_id ())
+  Server.Observer.set_compress_tracing_files (Observer.set_compress_tracing_files ()) ;

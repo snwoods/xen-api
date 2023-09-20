@@ -964,6 +964,8 @@ let winbind_keep_configuration = ref false
 
 let winbind_ldap_query_subject_timeout = ref 20.
 
+let zstd_cmd = ref "/usr/bin/zstd"
+
 let tdb_tool = ref "/usr/bin/tdbtool"
 
 let sqlite3 = ref "/usr/bin/sqlite3"
@@ -992,6 +994,8 @@ let export_interval = ref 30.
 let max_spans = ref 1000
 
 let max_traces = ref 10000
+
+let compress_tracing_files = ref true
 
 let prefer_nbd_attach = ref false
 
@@ -1479,6 +1483,11 @@ let other_options =
     , (fun () -> string_of_bool !nvidia_gpumon_detach)
     , "On VM start, detach the NVML library rather than stopping gpumon"
     )
+  ; ( "compress-tracing-files"
+    , Arg.Set compress_tracing_files
+    , (fun () -> string_of_bool !compress_tracing_files)
+    , "Enable compression of the tracing log files"
+    )
   ]
 
 (* The options can be set with the variable xapiflags in /etc/sysconfig/xapi.
@@ -1588,6 +1597,7 @@ module Resources = struct
       , "Path to yum-config-manager command"
       )
     ; ("c_rehash", c_rehash, "Path to Regenerate CA store")
+    ; ("zstd-cmd", zstd_cmd, "Path to zstd command")
     ]
 
   let nonessential_executables =
