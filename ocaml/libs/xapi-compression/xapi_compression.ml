@@ -20,6 +20,8 @@ module type COMPRESSOR = sig
 
   (* Experimental decompressor which is fed from an fd and writes to a pipe *)
   val decompress_passive : Unix.file_descr -> (Unix.file_descr -> 'a) -> 'a
+
+  val compress_file : (Unix.file_descr -> (Unix.file_descr -> int64) -> 'a) -> file_path:string -> unit
 end
 
 module D = Debug.Make (struct let name = "xapi_compression" end)
@@ -145,7 +147,7 @@ module Make (Algorithm : ALGORITHM) = struct
       Xapi_stdext_unix.Unixext.copy_file fd_r fd_w
       )
 
-  let compress_file compress_fn file_path =
+  let compress_file compress_fn ~file_path =
     ignore @@ Xapi_stdext_unix.Unixext.with_file (file_path ^ ".zstd") [O_WRONLY] 0o444
       compress_fn (write_to ~file_path)
 end

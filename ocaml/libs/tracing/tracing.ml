@@ -670,7 +670,7 @@ module Export = struct
           if (Unix.fstat fd).st_size >= !max_file_size then (
             debug "Tracing: Rotating file %s > %d" file_name !max_file_size ;
             ( if !compress_tracing_files then
-              Zstd.Fast.compress_file Zstd.Fast.compress file_name
+              Zstd.Fast.compress_file Zstd.Fast.compress ~file_path:file_name
             ) ;
             ignore @@ new_file_name ()
           ) ;

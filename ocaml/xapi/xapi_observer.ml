@@ -332,7 +332,7 @@ let initialise ~__context =
   set_max_traces ~__context !Xapi_globs.max_traces ;
   set_max_file_size ~__context !Xapi_globs.max_observer_file_size ;
   set_host_id ~__context (Helpers.get_localhost_uuid ()) ;
-  set_compress_tracing_files ~__context !Xapi_globs.compress_tracing_files
+  set_compress_tracing_files ~__context !Xapi_globs.compress_tracing_files ;
   Tracing.Export.set_service_name "xapi" ;
   init ~__context
 
