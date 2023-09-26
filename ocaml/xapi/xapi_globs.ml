@@ -964,8 +964,6 @@ let winbind_keep_configuration = ref false
 
 let winbind_ldap_query_subject_timeout = ref 20.
 
-let zstd_cmd = ref "/usr/bin/zstd"
-
 let tdb_tool = ref "/usr/bin/tdbtool"
 
 let sqlite3 = ref "/usr/bin/sqlite3"
@@ -1597,7 +1595,6 @@ module Resources = struct
       , "Path to yum-config-manager command"
       )
     ; ("c_rehash", c_rehash, "Path to Regenerate CA store")
-    ; ("zstd-cmd", zstd_cmd, "Path to zstd command")
     ]
 
   let nonessential_executables =

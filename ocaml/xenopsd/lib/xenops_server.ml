@@ -4209,5 +4209,5 @@ let _ =
   Server.Observer.set_max_spans (Observer.set_max_spans ()) ;
   Server.Observer.set_max_traces (Observer.set_max_traces ()) ;
   Server.Observer.set_max_file_size (Observer.set_max_file_size ()) ;
-  Server.Observer.set_host_id (Observer.set_host_id ())
+  Server.Observer.set_host_id (Observer.set_host_id ()) ;
   Server.Observer.set_compress_tracing_files (Observer.set_compress_tracing_files ()) ;

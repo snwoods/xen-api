@@ -670,21 +670,7 @@ module Export = struct
           if (Unix.fstat fd).st_size >= !max_file_size then (
             debug "Tracing: Rotating file %s > %d" file_name !max_file_size ;
             ( if !compress_tracing_files then
-              match
-                  Forkhelpers.with_logfile_fd "tracing-zstd" (fun log_fd ->
-                      let pid =
-                        Forkhelpers.safe_close_and_exec None None (Some log_fd)
-                          [] !Xapi_globs.zstd_cmd
-                          ["--fast"; "--rm"; "-f"; file_name]
-                      in
-                      Forkhelpers.waitpid_fail_if_bad_exit pid
-                  )
-                with
-                | Success _ ->
-                    debug "Compression succeeded"
-                | Failure (log, exn) ->
-                    debug "Compression failed, output: %s" log ;
-                    raise exn
+              Zstd.Fast.compress_file Zstd.Fast.compress file_name
             ) ;
             ignore @@ new_file_name ()
           ) ;

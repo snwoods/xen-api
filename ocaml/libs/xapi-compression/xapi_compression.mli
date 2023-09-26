@@ -20,6 +20,10 @@ module type COMPRESSOR = sig
 
   (* Experimental decompressor which is fed from an fd and writes to a pipe *)
   val decompress_passive : Unix.file_descr -> (Unix.file_descr -> 'a) -> 'a
+
+  val compress_file : file_path:string -> unit
+
+  (*val decompress_file : file_path:string -> unit*)
 end
 
 module Make : functor (_ : ALGORITHM) -> COMPRESSOR

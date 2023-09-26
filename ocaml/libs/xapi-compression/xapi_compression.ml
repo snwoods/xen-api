@@ -139,4 +139,13 @@ module Make (Algorithm : ALGORITHM) = struct
   let decompress fd f = go Decompress Active fd f
 
   let decompress_passive fd f = go Decompress Passive fd f
+
+  let write_to ~file_path fd_w =
+    Xapi_stdext_unix.Unixext.with_file file_path [O_RDONLY] 0o000 (fun fd_r ->
+      Xapi_stdext_unix.Unixext.copy_file fd_r fd_w
+      )
+
+  let compress_file compress_fn file_path =
+    Xapi_stdext_unix.Unixext.with_file (file_path ^ ".zstd") [O_WRONLY] 0o444
+      compress_fn (write_to ~file_path)
 end
