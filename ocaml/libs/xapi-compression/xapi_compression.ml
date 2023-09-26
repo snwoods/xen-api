@@ -146,6 +146,6 @@ module Make (Algorithm : ALGORITHM) = struct
       )
 
   let compress_file compress_fn file_path =
-    Xapi_stdext_unix.Unixext.with_file (file_path ^ ".zstd") [O_WRONLY] 0o444
+    ignore @@ Xapi_stdext_unix.Unixext.with_file (file_path ^ ".zstd") [O_WRONLY] 0o444
       compress_fn (write_to ~file_path)
 end
