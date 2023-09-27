@@ -5,6 +5,8 @@ let write_to ~file_path fd_w =
 
 let compress_file file_path =
   Xapi_stdext_unix.Unixext.with_file (file_path ^ ".zst") [O_WRONLY; O_CREAT] 0o444
-    Zstd.Fast.compress (write_to ~file_path)
+    @@ fun zst_file -> Zstd.Fast.compress zst_file (write_to ~file_path)
 
-let () = ignore @@ compress_file "/root/pg71692.txt"
+let () =
+  Debug.log_to_stdout () ;
+  ignore @@ compress_file "/root/pg71692.txt"
