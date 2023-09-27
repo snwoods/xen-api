@@ -22,8 +22,6 @@ module type COMPRESSOR = sig
   val decompress_passive : Unix.file_descr -> (Unix.file_descr -> 'a) -> 'a
 
   val compress_file : (Unix.file_descr -> (Unix.file_descr -> int64) -> 'a) -> file_path:string -> unit
-
-  (*val decompress_file : file_path:string -> unit*)
 end
 
 module Make : functor (_ : ALGORITHM) -> COMPRESSOR
