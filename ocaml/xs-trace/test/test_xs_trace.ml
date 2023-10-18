@@ -1,5 +1,4 @@
 let _ =
-  let inet_addr = Unix.ADDR_INET (Unix.inet_addr_of_string "127.0.0.1", 9411) in
   let read_body ic file len =
     let line = really_input_string ic !len in
     Printf.fprintf file "%s\n" line
@@ -17,8 +16,8 @@ let _ =
     | exception End_of_file ->
         ()
   in
-  let sock = Unix.socket Unix.PF_INET SOCK_STREAM 0 in
-  Unix.bind sock inet_addr ;
+  let sock = Unix.socket Unix.PF_UNIX SOCK_STREAM 0 in
+  Unix.bind sock (Unix.ADDR_UNIX "test-socket") ;
   Unix.listen sock 1 ;
   while true do
     let accept, _ = Unix.accept sock in
