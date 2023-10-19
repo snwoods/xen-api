@@ -6,6 +6,10 @@ export PATH_TO_FILE=$(pwd)
 
 PID=$!
 
+touch "test-file"
+
+echo "Testing 1"
+
 ls $PATH_TO_FILE/test-socket
 
 echo "Testing"
