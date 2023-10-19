@@ -6,6 +6,10 @@ export PATH_TO_FILE=$(pwd)
 
 PID=$!
 
+ls $PATH_TO_FILE/test-socket
+
+echo "Testing"
+
 ../xs_trace.exe cp test-source.json file://$PATH_TO_FILE/test-socket
 
 if [ $(diff test-source.json test-http-server.out) -ne 0 ]
