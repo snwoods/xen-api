@@ -7,6 +7,8 @@ export PATH_TO_FILE=$(pwd)
 
 PID=$!
 
+sleep 30
+
 touch "test-file"
 
 echo "Testing 1"
