@@ -27,4 +27,10 @@ rm test-http-server.out
 
 diff -B test-source.ndjson test-http-server.out || exit 1
 
+rm test-http-server.out
+
+../xs_trace.exe cp test-source.ndjson.zst file://$PATH_TO_FILE/test-socket
+
+diff -B test-source.ndjson test-http-server.out || exit 1
+
 kill $PID
