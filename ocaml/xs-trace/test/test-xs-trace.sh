@@ -12,18 +12,18 @@ sleep 30
 
 ../xs_trace.exe cp test-source.json http://$HOST:$PORT/api/v2/spans
 
-diff test-source.json test-http-server.out || exit 1
+diff -B test-source.json test-http-server.out || exit 1
 
 rm test-http-server.out
 
 ../xs_trace.exe cp test-source.ndjson http://$HOST:$PORT/api/v2/spans
 
-diff test-source.ndjson test-http-server.out || exit 1
+diff -B test-source.ndjson test-http-server.out || exit 1
 
 rm test-http-server.out
 
 ../xs_trace.exe cp test-source.ndjson.zst http://$HOST:$PORT/api/v2/spans
 
-diff test-source.ndjson test-http-server.out || exit 1
+diff -B test-source.ndjson test-http-server.out || exit 1
 
 kill $PID
