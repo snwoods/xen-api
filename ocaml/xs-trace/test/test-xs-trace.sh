@@ -8,6 +8,8 @@ export HOST="127.0.0.1"
 
 PID=$!
 
+sleep 30
+
 ../xs_trace.exe cp test-source.json http://$HOST:$PORT/api/v2/spans
 
 diff test-source.json test-http-server.out || exit 1
