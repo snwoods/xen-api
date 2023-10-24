@@ -1,12 +1,20 @@
 #!/bin/bash
 set -eux
 
-export PORT=9411
-export HOST="127.0.0.1"
+PORT=9411
+HOST="127.0.0.1"
+MAX_WAIT=60
 
 ./test_xs_trace.exe &
 
 PID=$!
+
+wait_counter=0
+while [ ! -f "test-server-ready" ] && [ $wait_counter < $MAX_WAIT ] do
+    sleep 3
+    echo wait_counter
+    wait_counter+=3
+done
 
 ../xs_trace.exe cp test-source.json http://$HOST:$PORT/api/v2/spans
 
