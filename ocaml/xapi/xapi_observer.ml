@@ -110,7 +110,130 @@ module Observer : ObserverInterface = struct
     Tracing.Export.Destination.File.set_compress_tracing_files enabled
 end
 
-let supported_components = ["xapi"; "xenopsd"]
+module ObserverConfig = struct
+  type t = {
+      otel_service_name: string
+    ; otel_resource_attributes: (string * string) list
+    ; otel_exporter_zipkin_endpoints: string list
+    ; xs_exporter_bugtool_endpoint: string option
+  }
+
+  let filtered_endpoints regex endpoints =
+    List.filter (fun endpoint -> Str.string_match regex endpoint 0) endpoints
+
+  let config_of_observer ~__context ~component ~observer =
+    let endpoints = Db.Observer.get_endpoints ~__context ~self:observer in
+    let zipkin_reg = Str.regexp "http://.*:9411" in
+    let bugtool_reg = Str.regexp "bugtool$" in
+    {
+      otel_service_name= component
+    ; otel_resource_attributes=
+        Db.Observer.get_attributes ~__context ~self:observer
+    ; otel_exporter_zipkin_endpoints= endpoints |> filtered_endpoints zipkin_reg
+    ; xs_exporter_bugtool_endpoint=
+        ( match endpoints |> filtered_endpoints bugtool_reg with
+        | x :: _ ->
+            Some x
+        | [] ->
+            None
+        )
+    }
+end
+
+module type COMPONENT = sig
+  val component_name : string
+end
+
+module Dom0ObserverConfig (Component : COMPONENT) : ObserverInterface = struct
+  let config_root = "/etc/xensource/observer/"
+
+  let env_vars_of_config (config : ObserverConfig.t) =
+    [
+      "OTEL_SERVICE_NAME=" ^ config.otel_service_name
+    ; "OTEL_RESOURCE_ATTRIBUTES="
+      ^ String.concat ","
+          (List.map (fun (k, v) -> k ^ "=" ^ v) config.otel_resource_attributes)
+    ; "OTEL_EXPORTER_ZIPKIN_ENDPOINTS="
+      ^ String.concat "," config.otel_exporter_zipkin_endpoints
+    ; "XS_EXPORTER_BUGTOOL_ENDPOINT="
+      ^ Option.value ~default:"" config.xs_exporter_bugtool_endpoint
+    ]
+
+  let remove_config ~uuid =
+    Xapi_stdext_unix.Unixext.unlink_safe
+      (config_root
+      ^ Component.component_name
+      ^ "/enabled/"
+      ^ uuid
+      ^ ".observer.conf"
+      )
+
+  let update_config ~__context ~observer ~config_root ~uuid =
+    if Db.Observer.get_enabled ~__context ~self:observer then (
+      let observer_config =
+        ObserverConfig.config_of_observer ~__context
+          ~component:Component.component_name ~observer
+      in
+      let dir_name = config_root ^ Component.component_name ^ "/enabled/" in
+      Xapi_stdext_unix.Unixext.mkdir_rec dir_name 0o755 ;
+      let file_name = dir_name ^ uuid ^ ".observer.conf" in
+      Xapi_stdext_unix.Unixext.write_string_to_file file_name
+        (String.concat "\n" (env_vars_of_config observer_config))
+    ) else
+      remove_config ~uuid
+
+  let update_all_configs ~__context ~observer_all =
+    List.iter
+      (fun observer ->
+        let uuid = Db.Observer.get_uuid ~__context ~self:observer in
+        update_config ~__context ~observer ~config_root ~uuid
+      )
+      observer_all
+
+  let create ~__context ~uuid ~name_label:_ ~attributes:_ ~endpoints:_ ~enabled:_ =
+    let observer = Db.Observer.get_by_uuid ~__context ~uuid in
+    update_config ~__context ~observer ~config_root ~uuid
+
+  let destroy ~__context ~uuid = remove_config ~uuid
+
+  let set_enabled ~__context ~uuid ~enabled:_ =
+    let observer = Db.Observer.get_by_uuid ~__context ~uuid in
+    update_config ~__context ~observer ~config_root ~uuid
+
+  let set_attributes ~__context ~uuid ~attributes:_ =
+    let observer = Db.Observer.get_by_uuid ~__context ~uuid in
+    update_config ~__context ~observer ~config_root ~uuid
+
+  let set_endpoints ~__context ~uuid ~endpoints:_ =
+    let observer = Db.Observer.get_by_uuid ~__context ~uuid in
+    update_config ~__context ~observer ~config_root ~uuid
+
+  let init ~__context =
+    let observer_all = Db.Observer.get_all ~__context in
+    update_all_configs ~__context ~observer_all
+
+  let set_trace_log_dir ~__context ~dir:_ =
+    let observer_all = Db.Observer.get_all ~__context in
+    update_all_configs ~__context ~observer_all
+
+  let set_export_interval ~__context:_ ~interval:_ = ()
+
+  let set_max_spans ~__context:_ ~spans:_ = ()
+
+  let set_max_traces ~__context:_ ~traces:_ = ()
+
+  let set_max_file_size ~__context:_ ~file_size:_ = ()
+
+  let set_host_id ~__context:_ ~host_id:_ = ()
+
+  let set_compress_tracing_files ~__context:_ ~enabled:_ = ()
+end
+
+module SMObserverConfig = Dom0ObserverConfig (struct
+  let component_name = "smapi"
+end)
+
+let supported_components = ["xapi"; "xenopsd"; "smapi"]
 
 let get_forwarder c =
   let module Forwarder = ( val match c with
@@ -118,6 +241,8 @@ let get_forwarder c =
                                    (module Observer)
                                | "xenopsd" ->
                                    (module Xapi_xenops.Observer)
+                               | "smapi" ->
+                                   (module SMObserverConfig)
                                | _ ->
                                    failwith
                                      (Printf.sprintf
