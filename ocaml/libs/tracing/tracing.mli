@@ -14,6 +14,8 @@
 
 type endpoint = Bugtool | Url of Uri.t
 
+val endpoint_of_string : string -> endpoint
+
 module SpanKind : sig
   type t = Server | Consumer | Client | Producer | Internal
 

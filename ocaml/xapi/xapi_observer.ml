@@ -149,25 +149,29 @@ module ObserverConfig = struct
     ; xs_exporter_bugtool_endpoint: string option
   }
 
-  let filtered_endpoints regex endpoints =
-    List.filter (fun endpoint -> Str.string_match regex endpoint 0) endpoints
+  let zipkin_endpoints endpoints =
+    (*For now, this accepts all endpoints except bugtool. This will change as more endpoints are added*)
+    List.filter
+      (fun endpoint -> match Tracing.endpoint_of_string endpoint with Tracing.Url _ -> true | _ -> false)
+      endpoints
+
+  let rec bugtool_endpoint endpoints =
+    match endpoints with
+    | x :: _ when Tracing.(endpoint_of_string x = Bugtool) ->
+        Some x
+    | x :: t ->
+        bugtool_endpoint t
+    | [] ->
+        None
 
   let config_of_observer ~__context ~component ~observer =
     let endpoints = Db.Observer.get_endpoints ~__context ~self:observer in
-    let zipkin_reg = Str.regexp "http://.*:9411" in
-    let bugtool_reg = Str.regexp "bugtool$" in
     {
       otel_service_name= component
     ; otel_resource_attributes=
         Db.Observer.get_attributes ~__context ~self:observer
-    ; otel_exporter_zipkin_endpoints= endpoints |> filtered_endpoints zipkin_reg
-    ; xs_exporter_bugtool_endpoint=
-        ( match endpoints |> filtered_endpoints bugtool_reg with
-        | x :: _ ->
-            Some x
-        | [] ->
-            None
-        )
+    ; otel_exporter_zipkin_endpoints= zipkin_endpoints endpoints
+    ; xs_exporter_bugtool_endpoint= bugtool_endpoint endpoints
     }
 end
 
@@ -226,7 +230,8 @@ module Dom0ObserverConfig (Component : COMPONENT) : ObserverInterface = struct
       )
       observer_all
 
-  let create ~__context ~uuid ~name_label:_ ~attributes:_ ~endpoints:_ ~enabled:_ =
+  let create ~__context ~uuid ~name_label:_ ~attributes:_ ~endpoints:_
+      ~enabled:_ =
     let observer = Db.Observer.get_by_uuid ~__context ~uuid in
     update_config ~__context ~observer ~config_root ~uuid
 
