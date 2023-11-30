@@ -812,4 +812,52 @@ module Export = struct
   end
 end
 
+module W3CBaggage = struct
+  let explode str = String.fold_right (fun c acc -> c :: acc) str []
+
+  module Key = struct
+    type t = string
+
+    let of_string str =
+      let is_tchar = function
+        | '0' .. '9'
+        | 'a' .. 'z'
+        | 'A' .. 'Z'
+        | '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '+' | '-' | '.' | '^' | '_'
+        | '`' | '|' | '~' ->
+            true
+        | _ -> false
+      in
+      let chars = explode str in
+      if List.for_all (fun c -> is_tchar c) chars then
+        str
+      else
+        "nope" (* Raise exception or something here*)
+  end
+
+  module Value = struct
+    type t = string
+
+    let of_string str =
+      let chars = explode str in
+      let rec encode_chars = function
+        | x :: tl ->
+          let s =
+            (* Encode anything that isn't in basic US-ASCII or is a Control, whitespace, DQUOTE , ; or \ *)
+            match x with
+            | '\000' .. '\032'
+            | '"' | ',' | ';' | '\\'
+            | '\128' .. '\255' ->
+                Printf.sprintf "%%%02X" (Char.code x)
+            | _ ->
+                String.make 1 x
+          in
+          s ^ encode_chars tl
+        | [] ->
+            ""
+      in
+      encode_chars chars
+  end
+end
+
 let main = Export.Destination.main
