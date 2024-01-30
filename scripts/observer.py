@@ -7,14 +7,17 @@ debug_enabled = False
 import logging
 from logging.handlers import SysLogHandler
 syslog = logging.getLogger(__name__)
-syslog.setLevel(logging.DEBUG)
+if debug_enabled:
+  syslog.setLevel(logging.DEBUG)
+else:
+  syslog.setLevel(logging.INFO)
 syslog.addHandler(SysLogHandler(address='/dev/log'))
 debug = syslog.debug # syslog.debug("%(message)s", msg)
 
 try: 
   import os
   # there can be many observer config files in the configuration directory
-  observer_conf_dir = "/etc/xensource/observer/smapi/enabled/" #os.getenv("OBSERVER_CONF_DIR", default=".")
+  observer_conf_dir = os.getenv("OBSERVER_CONF_DIR", default=".")
   configs = [(observer_conf_dir+"/"+f) for f in os.listdir(observer_conf_dir) if os.path.isfile(os.path.join(observer_conf_dir, f)) and f.endswith("observer.conf")] 
 except Exception as e:
   #debug ("conf_dir="+str(e))
@@ -58,23 +61,22 @@ if configs:
   def tracer_of_config(path):
     otelvars='https://opentelemetry-python.readthedocs.io/en/latest/sdk/environment_variables.html'
     argkv=kvs_of_config(path,header=otelvars)
-    trace_log_dir_base = argkv.get("trace_log_dir_base", "/var/log/dt/")
-    otel_exporter_zipkin_endpoint = argkv.get("otel_exporter_zipkin_endpoint")
+    trace_log_dir = argkv.get("xs_exporter_bugtool_endpoint", "/var/log/dt/")
+    otel_exporter_zipkin_endpoints = argkv.get("xs_exporter_zipkin_endpoints").split(",") if argkv.get("xs_exporter_zipkin_endpoints") else []
     otel_resource_attributes = dict(item.split("=") for item in argkv.get("otel_resource_attributes", "").split(",") if "=" in item)
     # internal SM default attributes
-    service_name=argkv.get("otel_service_name", otel_resource_attributes.get("service.name", "unknown") )
+    service_name=argkv.get("otel_service_name", otel_resource_attributes.get("service.name", "unknown"))
     
     host_uuid=otel_resource_attributes.get("xs.host.uuid", "unknown")
-    traceparent=argkv.get("traceparent", "unknown")
-    tracestate=argkv.get("tracestate", "unknown")
+    traceparent=os.getenv("TRACEPARENT", "unknown")
+    tracestate=os.getenv("TRACESTATE", "unknown")
   
     from typing import Sequence
     from opentelemetry.sdk.trace.export import SpanExportResult
     from opentelemetry.trace import Span
     from datetime import datetime, timezone
-    basedir = trace_log_dir_base + "/zipkinv2/json/"
     #eg.:"/var/log/dt/zipkinv2/json/xapi-6ddf2ff7-cdf7-479d-a943-ad8776c3fcf7-2023-11-09T18:39:53.322802-00:00.ndjson"
-    bugtool_filenamer = lambda: basedir + service_name + "-" + host_uuid + "-" + tracestate + "-" + datetime.now(timezone.utc).isoformat() + ".ndjson" #rfc3339
+    bugtool_filenamer = lambda: trace_log_dir + service_name + "-" + host_uuid + "-" + tracestate + "-" + datetime.now(timezone.utc).isoformat() + ".ndjson" #rfc3339
     debug("filenamer="+bugtool_filenamer())
     class FileZipkinExporter(ZipkinExporter):
       def __init__(self, *args, **kwargs):
@@ -88,6 +90,7 @@ if configs:
         datastr=str(data)
         debug("data.type="+str(type(data))+",data.len="+str(len(datastr)))
         debug("data="+datastr)
+        os.makedirs (name=trace_log_dir, exist_ok=True)
         with open(self.bugtool_filename,'a') as bugtool_file:
           bugtool_file.write(datastr+"\n") #ndjson
         self.written_so_far_in_file += len(data)
@@ -106,12 +109,13 @@ if configs:
         )
       )
     )
-    processor_filezipkin = BatchSpanProcessor(FileZipkinExporter())
-    provider.add_span_processor(processor_filezipkin)
-    if otel_exporter_zipkin_endpoint:
+    if argkv.get("xs_exporter_bugtool_endpoint"):
+      processor_filezipkin = BatchSpanProcessor(FileZipkinExporter())
+      provider.add_span_processor(processor_filezipkin)
+    for zipkin_endpoint in otel_exporter_zipkin_endpoints:
       processor_zipkin  = BatchSpanProcessor(ZipkinExporter(
         # https://opentelemetry-python.readthedocs.io/en/latest/exporter/zipkin/zipkin.html
-        endpoint = otel_exporter_zipkin_endpoint
+        endpoint = zipkin_endpoint
       ))
       provider.add_span_processor(processor_zipkin)
 
@@ -146,6 +150,7 @@ if configs:
     def wrapper(wrapped, instance, args, kwargs):
       span_name = None
       span_attributes = None
+      #TODO tracers == [] is included in not tracers?
       if not tracers or tracers == []:
         return wrapped(*args, **kwargs)
       else:
@@ -168,7 +173,11 @@ if configs:
             # function, staticmethod or instancemethod
             for k,v in inspect.getcallargs(wrapped, *args, **kwargs).items():
               aspan.set_attribute("xs.span.arg." + k, str(v))
-          result = wrapped(*args, **kwargs) #must be inside aspan to produce nested trace        
+          result = wrapped(*args, **kwargs) #must be inside aspan to produce nested trace
+          #TODO copy aspan for the tracers[1:]? Should they not be tracking different files though? e.g. one for smapi one for something else?
+          for tracer in tracers[1:]:
+            for span in aspan:
+              trace.set_span_in_context(span)
         return result
 
     def autoinstrument_class(aclass):
