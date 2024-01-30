@@ -96,14 +96,16 @@ if configs:
         self.written_so_far_in_file += len(data)
         if self.written_so_far_in_file > 1024*1024:
           #TODO:compress current bugtool_filename using zstd (or write it in compressed format)
+          # current_filename = self.bugtool_filename
           self.bugtool_filename = bugtool_filenamer()
           self.written_so_far_in_file = 0
+          # zstd current_filename
         return SpanExportResult.SUCCESS
 
     provider = TracerProvider(
       resource=Resource.create(
         W3CBaggagePropagator().extract(
-          {},
+          {"traceparent": os.getenv("TRACEPARENT")}, #TODO see if this actually works or if should add it to start_as_current_span
           # externally-provided SM attributes
           otel_resource_attributes
         )
@@ -163,7 +165,7 @@ if configs:
           span_attributes = kwargs
 
         tracer=tracers[0]
-        _aspan = None #override the with aspan somehow so we can use it outside its scope?
+        _aspan = None #TODO override the with aspan somehow so we can use it outside its scope?
         with tracer.start_as_current_span(span_name) as aspan:
           if inspect.isclass(wrapped):
             # class or classmethod
@@ -187,6 +189,7 @@ if configs:
         if inspect.isclass(aclass):
           tracer = tracers[0]
           my_module_name = str(aclass.__module__) + ":" + aclass.__qualname__
+          #TODO copy the changes above about traces[1:]
           with tracer.start_as_current_span("auto_instrumentation.add: " + my_module_name):
             for name in [fn for fn in aclass.__dict__ if callable(getattr(aclass, fn))]:
               f = aclass.__dict__[name]
