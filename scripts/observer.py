@@ -150,8 +150,7 @@ if configs:
     def wrapper(wrapped, instance, args, kwargs):
       span_name = None
       span_attributes = None
-      #TODO tracers == [] is included in not tracers?
-      if not tracers or tracers == []:
+      if not tracers:
         return wrapped(*args, **kwargs)
       else:
         if not span_name:
@@ -164,6 +163,7 @@ if configs:
           span_attributes = kwargs
 
         tracer=tracers[0]
+        _aspan = None #override the with aspan somehow so we can use it outside its scope?
         with tracer.start_as_current_span(span_name) as aspan:
           if inspect.isclass(wrapped):
             # class or classmethod
@@ -174,10 +174,12 @@ if configs:
             for k,v in inspect.getcallargs(wrapped, *args, **kwargs).items():
               aspan.set_attribute("xs.span.arg." + k, str(v))
           result = wrapped(*args, **kwargs) #must be inside aspan to produce nested trace
-          #TODO copy aspan for the tracers[1:]? Should they not be tracking different files though? e.g. one for smapi one for something else?
+          _aspan = aspan
+        # Broadcast the span across all processors
+        if _aspan:
           for tracer in tracers[1:]:
-            for span in aspan:
-              trace.set_span_in_context(span)
+            for processor in tracer.processors:
+              processor.on_end(_aspan)
         return result
 
     def autoinstrument_class(aclass):
