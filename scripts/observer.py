@@ -73,7 +73,7 @@ if configs:
   def tracer_of_config(path):
     otelvars='https://opentelemetry-python.readthedocs.io/en/latest/sdk/environment_variables.html'
     argkv=kvs_of_config(path,header=otelvars)
-    trace_log_dir = argkv.get("xs_exporter_bugtool_endpoint", "/var/log/dt/")
+    trace_log_dir = argkv.get("xs_exporter_bugtool_endpoint", "/var/log/dt/zipkinv2/json/")
     otel_exporter_zipkin_endpoints = argkv.get("xs_exporter_zipkin_endpoints").split(",") if argkv.get("xs_exporter_zipkin_endpoints") else []
     otel_resource_attributes = dict(item.split("=") for item in argkv.get("otel_resource_attributes", "").split(",") if "=" in item)
     # internal SM default attributes
