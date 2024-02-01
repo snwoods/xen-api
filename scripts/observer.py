@@ -2,17 +2,29 @@
 
 configs = []
 
-debug_enabled = False
+debug_enabled = True
 
 import logging
 from logging.handlers import SysLogHandler
+FORMAT = "observer.py: %(message)s"
+handler = SysLogHandler(facility='local5', address='/dev/log')
+logging.basicConfig(format=FORMAT, handlers=[handler])
 syslog = logging.getLogger(__name__)
 if debug_enabled:
   syslog.setLevel(logging.DEBUG)
 else:
   syslog.setLevel(logging.INFO)
-syslog.addHandler(SysLogHandler(address='/dev/log'))
+#TODO I seriously don't know why the below isn't working, it's almost exactly what log.py does
+#handler.setFormatter(logging.Formatter(FORMAT))
+#syslog.addHandler(logging.handlers.SysLogHandler(facility='local5', address='/dev/log'))
 debug = syslog.debug # syslog.debug("%(message)s", msg)
+
+# idk if we should use this format that xapi uses? It looks like the `Feb  1 11:04:22 xrtmia-11-83` part comes from syslog
+# the 'xapi/xcp-rrdd' bit comes from somewhere else that I can't figure out (check in debug.ml) and the rest comes from this
+# formatter
+#   Printf.sprintf "[%s%5s||%d %s|%s|%s] %s"
+#   (if include_time then gettimestring () else "")
+#   priority id name task brand message
 
 try: 
   import os
@@ -20,7 +32,7 @@ try:
   observer_conf_dir = os.getenv("OBSERVER_CONF_DIR", default=".")
   configs = [(observer_conf_dir+"/"+f) for f in os.listdir(observer_conf_dir) if os.path.isfile(os.path.join(observer_conf_dir, f)) and f.endswith("observer.conf")] 
 except Exception as e:
-  #debug ("conf_dir="+str(e))
+  debug ("conf_dir="+str(e))
   pass
 
 # noop decorator
@@ -105,7 +117,8 @@ if configs:
     provider = TracerProvider(
       resource=Resource.create(
         W3CBaggagePropagator().extract(
-          {"traceparent": os.getenv("TRACEPARENT")}, #TODO see if this actually works or if should add it to start_as_current_span
+          {},
+          #{"traceparent": os.getenv("TRACEPARENT")}, #TODO see if this actually works or if should add it to start_as_current_span
           # externally-provided SM attributes
           otel_resource_attributes
         )
