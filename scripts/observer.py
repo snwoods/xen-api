@@ -26,17 +26,24 @@ debug = syslog.debug # syslog.debug("%(message)s", msg)
 #   (if include_time then gettimestring () else "")
 #   priority id name task brand message
 
-try: 
+try:
   import os
   # there can be many observer config files in the configuration directory
-  observer_conf_dir = os.getenv("OBSERVER_CONF_DIR", default=".")
-  configs = [(observer_conf_dir+"/"+f) for f in os.listdir(observer_conf_dir) if os.path.isfile(os.path.join(observer_conf_dir, f)) and f.endswith("observer.conf")]
+  observer_config_dir = os.getenv("OBSERVER_CONFIG_DIR", default=".").strip("'")
+  configs = [(observer_config_dir+"/"+f) for f in os.listdir(observer_config_dir) if os.path.isfile(os.path.join(observer_config_dir, f)) and f.endswith("observer.conf")]
+  debug(f"configs = {configs}")
+  configs = []
 except Exception as e:
-  debug ("conf_dir="+str(e))
+  debug ("conf_dir exception:"+str(e))
   pass
 
+import functools
+
 # noop decorator
-def span(wrapped=None):
+def span(wrapped=None, span_name_prefix=""):
+  if wrapped is None:
+    return functools.partial(span, span_name_prefix=span_name_prefix)
+
   return wrapped
 
 # noop patch_module
@@ -45,6 +52,8 @@ def patch_module(module_name):
 
 # do not do anything unless configuration files have been found
 if configs:
+
+  debug (f"Configs: {configs}")
 
   tracers = []
 
@@ -63,32 +72,33 @@ if configs:
     with open(path) as config_file:
       cfg.read_string(f"[{header}]\n" + config_file.read()) 
     kvs = dict(cfg[header])
+    kvs = {k: v.strip("'") for k, v in kvs.items()}
     debug(path+":kvs="+str(kvs))
     return kvs
 
-  kvs_all_conf=kvs_of_config(observer_conf_dir+"/all.conf")
+  kvs_all_conf=kvs_of_config(observer_config_dir+"/all.conf")
   module_names=kvs_all_conf.get("module_names", "LVHDSR,XenAPI,SR,SRCommand,util").split(",")
   debug("module_names="+str(module_names))
 
   def tracer_of_config(path):
     otelvars='https://opentelemetry-python.readthedocs.io/en/latest/sdk/environment_variables.html'
     argkv=kvs_of_config(path,header=otelvars)
-    trace_log_dir = argkv.get("xs_exporter_bugtool_endpoint", "/var/log/dt/zipkinv2/json/")
+    trace_log_dir = argkv.get("xs_exporter_bugtool_endpoint", "/var/log/dt/zipkinv2/json")
     otel_exporter_zipkin_endpoints = argkv.get("xs_exporter_zipkin_endpoints").split(",") if argkv.get("xs_exporter_zipkin_endpoints") else []
     otel_resource_attributes = dict(item.split("=") for item in argkv.get("otel_resource_attributes", "").split(",") if "=" in item)
     # internal SM default attributes
     service_name=argkv.get("otel_service_name", otel_resource_attributes.get("service.name", "unknown"))
     
     host_uuid=otel_resource_attributes.get("xs.host.uuid", "unknown")
-    traceparent=os.getenv("TRACEPARENT", "unknown")
-    tracestate=os.getenv("TRACESTATE", "unknown")
+    traceparent=os.getenv("TRACEPARENT", "unknown").strip("'")
+    tracestate=os.getenv("TRACESTATE", "unknown").strip("'")
   
     from typing import Sequence
     from opentelemetry.sdk.trace.export import SpanExportResult
     from opentelemetry.trace import Span
     from datetime import datetime, timezone
     #eg.:"/var/log/dt/zipkinv2/json/xapi-6ddf2ff7-cdf7-479d-a943-ad8776c3fcf7-2023-11-09T18:39:53.322802-00:00.ndjson"
-    bugtool_filenamer = lambda: trace_log_dir + service_name + "-" + host_uuid + "-" + tracestate + "-" + datetime.now(timezone.utc).isoformat() + ".ndjson" #rfc3339
+    bugtool_filenamer = lambda: trace_log_dir + "/" + service_name + "-" + host_uuid + "-" + tracestate + "-" + datetime.now(timezone.utc).isoformat() + ".ndjson" #rfc3339
     debug("filenamer="+bugtool_filenamer())
     class FileZipkinExporter(ZipkinExporter):
       def __init__(self, *args, **kwargs):
@@ -154,7 +164,6 @@ if configs:
   import traceback
   import wrapt
   import inspect
-  import functools
   import sys
 
   def span_of_tracers(wrapped=None, span_name_prefix=""):
