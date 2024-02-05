@@ -32,7 +32,6 @@ try:
   observer_config_dir = os.getenv("OBSERVER_CONFIG_DIR", default=".").strip("'")
   configs = [(observer_config_dir+"/"+f) for f in os.listdir(observer_config_dir) if os.path.isfile(os.path.join(observer_config_dir, f)) and f.endswith("observer.conf")]
   debug(f"configs = {configs}")
-  configs = []
 except Exception as e:
   debug ("conf_dir exception:"+str(e))
   pass
@@ -70,7 +69,7 @@ if configs:
   def kvs_of_config(path,header="default"):
     cfg = configparser.ConfigParser()
     with open(path) as config_file:
-      cfg.read_string(f"[{header}]\n" + config_file.read()) 
+      cfg.read_string(f"[{header}]\n" + config_file.read())
     kvs = dict(cfg[header])
     kvs = {k: v.strip("'") for k, v in kvs.items()}
     debug(path+":kvs="+str(kvs))
@@ -88,11 +87,11 @@ if configs:
     otel_resource_attributes = dict(item.split("=") for item in argkv.get("otel_resource_attributes", "").split(",") if "=" in item)
     # internal SM default attributes
     service_name=argkv.get("otel_service_name", otel_resource_attributes.get("service.name", "unknown"))
-    
+
     host_uuid=otel_resource_attributes.get("xs.host.uuid", "unknown")
     traceparent=os.getenv("TRACEPARENT", "unknown").strip("'")
     tracestate=os.getenv("TRACESTATE", "unknown").strip("'")
-  
+
     from typing import Sequence
     from opentelemetry.sdk.trace.export import SpanExportResult
     from opentelemetry.trace import Span
@@ -102,7 +101,7 @@ if configs:
     debug("filenamer="+bugtool_filenamer())
     class FileZipkinExporter(ZipkinExporter):
       def __init__(self, *args, **kwargs):
-        self.bugtool_filename = bugtool_filenamer() 
+        self.bugtool_filename = bugtool_filenamer()
         self.written_so_far_in_file = 0
         debug("FileZipkinExporter="+str(self))
         super().__init__(*args, **kwargs)
@@ -231,7 +230,7 @@ if configs:
         autoinstrument_class(aclass)
       functions = inspect.getmembers(amodule, inspect.isfunction)
       for (function_name, afunction) in functions:
-        setattr(amodule, function_name, wrapper(afunction)) 
+        setattr(amodule, function_name, wrapper(afunction))
 
     if inspect.ismodule(wrapped):
       autoinstrument_module(wrapped)
