@@ -62,6 +62,7 @@ if configs:
   from opentelemetry.sdk.trace.export import BatchSpanProcessor
   from opentelemetry.exporter.zipkin.json import ZipkinExporter
   from opentelemetry.baggage.propagation import W3CBaggagePropagator
+  from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
   import configparser
   import os
@@ -82,6 +83,10 @@ if configs:
   def tracer_of_config(path):
     otelvars='https://opentelemetry-python.readthedocs.io/en/latest/sdk/environment_variables.html'
     argkv=kvs_of_config(path,header=otelvars)
+    config_otel_resource_attributes = argkv.get("otel_resource_attributes", "")
+    if config_otel_resource_attributes:
+      # OTEL requires some attributes e.g. service.name to be in the environment variable
+      os.environ["OTEL_RESOURCE_ATTRIBUTES"] = config_otel_resource_attributes
     trace_log_dir = argkv.get("xs_exporter_bugtool_endpoint", "/var/log/dt/zipkinv2/json")
     otel_exporter_zipkin_endpoints = argkv.get("xs_exporter_zipkin_endpoints").split(",") if argkv.get("xs_exporter_zipkin_endpoints") else []
     otel_resource_attributes = dict(item.split("=") for item in argkv.get("otel_resource_attributes", "").split(",") if "=" in item)
@@ -89,8 +94,8 @@ if configs:
     service_name=argkv.get("otel_service_name", otel_resource_attributes.get("service.name", "unknown"))
 
     host_uuid=otel_resource_attributes.get("xs.host.uuid", "unknown")
-    traceparent=os.getenv("TRACEPARENT", "unknown").strip("'")
-    tracestate=os.getenv("TRACESTATE", "unknown").strip("'")
+    # Remove . to prevent users changing directories in the bugtool_filenamer
+    tracestate=os.getenv("TRACESTATE", "unknown").strip("'").replace(".", "")
 
     from typing import Sequence
     from opentelemetry.sdk.trace.export import SpanExportResult
@@ -123,11 +128,18 @@ if configs:
           # zstd current_filename
         return SpanExportResult.SUCCESS
 
+    traceparent = os.getenv("TRACEPARENT", None)
+    # TODO see if we can fix the traceflag in the xapi code instead
+    traceparent = traceparent[:-1] + "1"
+    propagator = TraceContextTextMapPropagator()
+    context_with_traceparent = propagator.extract({"traceparent": traceparent})
+    from opentelemetry.context import attach
+    attach(context_with_traceparent)
+
     provider = TracerProvider(
       resource=Resource.create(
         W3CBaggagePropagator().extract(
           {},
-          #{"traceparent": os.getenv("TRACEPARENT")}, #TODO see if this actually works or if should add it to start_as_current_span
           # externally-provided SM attributes
           otel_resource_attributes
         )
