@@ -12,11 +12,11 @@
  * GNU Lesser General Public License for more details.
  *)
 
-type t = Xapi | Xenopsd | Xapi_clusterd | SMApi [@@deriving ord]
+type t = Xapi | Xenopsd | Xapi_clusterd | SM [@@deriving ord]
 
 exception Unsupported_Component of string
 
-let all = [Xapi; Xenopsd; Xapi_clusterd; SMApi]
+let all = [Xapi; Xenopsd; Xapi_clusterd; SM]
 
 let to_string = function
   | Xapi ->
@@ -25,8 +25,8 @@ let to_string = function
       "xenopsd"
   | Xapi_clusterd ->
       "xapi-clusterd"
-  | SMApi ->
-      "smapi"
+  | SM ->
+      "sm"
 
 let of_string = function
   | "xapi" ->
@@ -35,8 +35,8 @@ let of_string = function
       Xenopsd
   | "xapi-clusterd" ->
       Xapi_clusterd
-  | "smapi" ->
-      SMApi
+  | "sm" ->
+      SM
   | c ->
       raise (Unsupported_Component c)
 
@@ -77,7 +77,7 @@ let is_component_enabled ~component =
       )
   with _ -> false
 
-let is_smapi_enabled () = is_component_enabled ~component:SMApi
+let is_sm_enabled () = is_component_enabled ~component:SM
 
 let ( // ) = Filename.concat
 
