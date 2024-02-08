@@ -242,9 +242,23 @@ module ObserverConfig = struct
         None
 
   let attributes_to_W3CBaggage attrs =
-    List.map
+    let tuples_to_string tuples =
+      List.fold_left (fun acc (k, v) ->
+        if acc <> "" then
+          Printf.sprintf "%s, %s=%s" acc k v
+        else
+          k ^ "=" ^ v)
+      "" tuples
+    in
+    let attribute_string = tuples_to_string attrs in
+    debug "attributes_to_W3C: %s\n" attribute_string ;
+    let result = List.map
       (fun (k, v) -> (k, Tracing.W3CBaggage.Value.(v |> make |> to_string)))
       attrs
+    in
+    let result_string = tuples_to_string result in
+    debug "W3C result: %s\n" result_string ;
+    result
 
   let config_of_observer ~__context ~component ~observer =
     let endpoints = Db.Observer.get_endpoints ~__context ~self:observer in
