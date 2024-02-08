@@ -252,8 +252,8 @@ module ObserverConfig = struct
       otel_service_name= component
     ; otel_resource_attributes=
         attributes_to_W3CBaggage
-          (Db.Observer.get_attributes ~__context ~self:observer)
-          @ [("service.name", component)]
+          (Db.Observer.get_attributes ~__context ~self:observer
+          @ [("service.name", component)])
     ; xs_exporter_zipkin_endpoints= zipkin_endpoints endpoints
     ; xs_exporter_bugtool_endpoint= bugtool_endpoint endpoints
     }
