@@ -80,7 +80,6 @@ if configs:
     if config_otel_resource_attributes:
       # OTEL requires some attributes e.g. service.name to be in the environment variable
       os.environ["OTEL_RESOURCE_ATTRIBUTES"] = config_otel_resource_attributes
-    trace_log_dir = argkv.get("xs_exporter_bugtool_endpoint", "/var/log/dt/zipkinv2/json")
     otel_exporter_zipkin_endpoints = argkv.get("xs_exporter_zipkin_endpoints").split(",") if argkv.get("xs_exporter_zipkin_endpoints") else []
     otel_resource_attributes = dict(item.split("=") for item in argkv.get("otel_resource_attributes", "").split(",") if "=" in item)
     service_name=argkv.get("otel_service_name", otel_resource_attributes.get("service.name", "unknown"))
@@ -93,30 +92,33 @@ if configs:
     from opentelemetry.sdk.trace.export import SpanExportResult
     from opentelemetry.trace import Span
     from datetime import datetime, timezone
-    # eg.:"/var/log/dt/zipkinv2/json/xapi-6ddf2ff7-cdf7-479d-a943-ad8776c3fcf7-2023-11-09T18:39:53.322802-00:00.ndjson"
-    bugtool_filenamer = lambda: trace_log_dir + "/" + service_name + "-" + host_uuid + "-" + tracestate + "-" + datetime.now(timezone.utc).isoformat() + ".ndjson" # rfc3339
-    debug("filenamer="+bugtool_filenamer())
-    class FileZipkinExporter(ZipkinExporter):
-      def __init__(self, *args, **kwargs):
-        self.bugtool_filename = bugtool_filenamer()
-        self.written_so_far_in_file = 0
-        debug("FileZipkinExporter="+str(self))
-        super().__init__(*args, **kwargs)
-      # https://github.com/open-telemetry/opentelemetry-python/blob/main/exporter/opentelemetry-exporter-zipkin-json/src/opentelemetry/exporter/zipkin/json/__init__.py#L152
-      def export(self, spans: Sequence[Span]) -> SpanExportResult:
-        data=self.encoder.serialize(spans, self.local_node)
-        datastr=str(data)
-        debug("data.type="+str(type(data))+",data.len="+str(len(datastr)))
-        debug("data="+datastr)
-        os.makedirs (name=trace_log_dir, exist_ok=True)
-        with open(self.bugtool_filename,'a') as bugtool_file:
-          bugtool_file.write(datastr+"\n") # ndjson
-        self.written_so_far_in_file += len(data)
-        if self.written_so_far_in_file > 1024*1024:
-          # TODO: compress current bugtool_filename using zstd (or write it in compressed format)
+
+    if argkv.get("xs_exporter_bugtool_endpoint"):
+      trace_log_dir = argkv.get("xs_exporter_bugtool_endpoint")
+      # eg.:"/var/log/dt/zipkinv2/json/xapi-6ddf2ff7-cdf7-479d-a943-ad8776c3fcf7-2023-11-09T18:39:53.322802-00:00.ndjson"
+      bugtool_filenamer = lambda: trace_log_dir + "/" + service_name + "-" + host_uuid + "-" + tracestate + "-" + datetime.now(timezone.utc).isoformat() + ".ndjson" # rfc3339
+      debug("filenamer="+bugtool_filenamer())
+      class FileZipkinExporter(ZipkinExporter):
+        def __init__(self, *args, **kwargs):
           self.bugtool_filename = bugtool_filenamer()
           self.written_so_far_in_file = 0
-        return SpanExportResult.SUCCESS
+          debug("FileZipkinExporter="+str(self))
+          super().__init__(*args, **kwargs)
+        # https://github.com/open-telemetry/opentelemetry-python/blob/main/exporter/opentelemetry-exporter-zipkin-json/src/opentelemetry/exporter/zipkin/json/__init__.py#L152
+        def export(self, spans: Sequence[Span]) -> SpanExportResult:
+          data=self.encoder.serialize(spans, self.local_node)
+          datastr=str(data)
+          debug("data.type="+str(type(data))+",data.len="+str(len(datastr)))
+          debug("data="+datastr)
+          os.makedirs (name=trace_log_dir, exist_ok=True)
+          with open(self.bugtool_filename,'a') as bugtool_file:
+            bugtool_file.write(datastr+"\n") # ndjson
+          self.written_so_far_in_file += len(data)
+          if self.written_so_far_in_file > 1024*1024:
+            # TODO: compress current bugtool_filename using zstd (or write it in compressed format)
+            self.bugtool_filename = bugtool_filenamer()
+            self.written_so_far_in_file = 0
+          return SpanExportResult.SUCCESS
 
     traceparent = os.getenv("TRACEPARENT", None)
     propagator = TraceContextTextMapPropagator()
