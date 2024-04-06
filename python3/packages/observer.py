@@ -28,6 +28,7 @@ import os
 import runpy
 import sys
 import traceback
+import types
 from datetime import datetime, timezone
 from logging.handlers import SysLogHandler
 from typing import List, Sequence
@@ -288,12 +289,13 @@ def _init_tracing(configs: List[str], config_dir: str):
                     # class or classmethod
                     aspan.set_attribute("xs.span.args.str", str(args))
                     aspan.set_attribute("xs.span.kwargs.str", str(kwargs))
-                else:
-                    # function, staticmethod or instancemethod
+                elif type(wrapped)==types.FunctionType or type(wrapped)==types.MethodType:
                     bound_args = inspect.signature(wrapped).bind(*args, **kwargs)
                     bound_args.apply_defaults()
                     for k, v in bound_args.arguments.items():
                         aspan.set_attribute(f"xs.span.arg.{k}", str(v))
+                else: #eg. class 'PartialCallableObjectProxy'
+                    pass
 
                 # must be inside "aspan" to produce nested trace
                 result = wrapped(*args, **kwargs)
