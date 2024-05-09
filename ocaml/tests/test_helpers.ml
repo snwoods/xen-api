@@ -447,6 +447,30 @@ module RunInParallel = Generic.MakeStateless (struct
       ]
 end)
 
+let hashables =
+  [
+    ( "foobar"
+    , "C3:AB:8F:F1:37:20:E8:AD:90:47:DD:39:46:6B:3C:89:74:E5:92:C2:FA:38:3D:4A:39:60:71:4C:AE:F0:C4:F2"
+    )
+  ]
+
+let pp_hash_test =
+  List.map
+    (fun (hashable, expected) ->
+      let test_hash () =
+        let digest =
+          Cstruct.of_string hashable |> Mirage_crypto.Hash.digest `SHA256
+        in
+        Alcotest.(check string)
+          "fingerprints must match" expected (Helpers.pp_hash digest)
+      in
+      ( Printf.sprintf {|Validation of hash printing of "%s"|} hashable
+      , `Quick
+      , test_hash
+      )
+    )
+    hashables
+
 let tests =
   make_suite "helpers_"
     [
@@ -456,4 +480,5 @@ let tests =
     ; ("assert_is_valid_ip", IPCheckers.tests)
     ; ("assert_is_valid_cidr", CIDRCheckers.tests)
     ; ("run_in_parallel", RunInParallel.tests)
+    ; ("pp_hash", pp_hash_test)
     ]

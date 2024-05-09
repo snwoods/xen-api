@@ -34,7 +34,7 @@ let install ~__context ~host:_ ~type' cert =
 let is_unchanged ~__context cert_ref cert =
   let ref_hash = Db.Certificate.get_fingerprint ~__context ~self:cert_ref in
   let cert_hash =
-    X509.Certificate.fingerprint `SHA256 cert |> Certificates.pp_hash
+    X509.Certificate.fingerprint `SHA256 cert |> Helpers.pp_hash
   in
   cert_hash = ref_hash
 

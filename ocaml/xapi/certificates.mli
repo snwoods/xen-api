@@ -18,8 +18,6 @@ type t_trusted = CA_Certificate | CRL
 
 val pem_of_string : string -> X509.Certificate.t
 
-val pp_hash : Cstruct.t -> string
-
 val validate_name : t_trusted -> string -> unit
 
 val hostnames_of_pem_cert :

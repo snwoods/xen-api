@@ -250,24 +250,27 @@ let is_host_is_slave_error (response : Rpc.response) =
       false
 
 let create_thumbprint_header req response =
-  let include_thumbprint =
+  let hash_type_option =
     match
       List.assoc_opt
         !Xapi_globs.cert_thumbprint_header_request
         req.Http.Request.additional_headers
     with
-    | Some x when x = !Xapi_globs.cert_thumbprint_header_value ->
-        true
+    | Some x when x = !Xapi_globs.cert_thumbprint_header_value_sha256 ->
+        Some `Sha256
+    | Some x when x = !Xapi_globs.cert_thumbprint_header_value_sha1 ->
+        Some `Sha1
     | _ ->
-        false
+        None
   in
-  if include_thumbprint && is_host_is_slave_error response then
-    Helpers.external_certificate_thumbprint_of_master ()
-    |> Option.fold ~none:[] ~some:(fun x ->
-           [(!Xapi_globs.cert_thumbprint_header_response, x)]
-       )
-  else
-    []
+  match (hash_type_option, is_host_is_slave_error response) with
+  | Some hash_type, true ->
+      Helpers.external_certificate_thumbprint_of_master ~hash_type ()
+      |> Option.fold ~none:[] ~some:(fun x ->
+             [(!Xapi_globs.cert_thumbprint_header_response, x)]
+         )
+  | _, _ ->
+      []
 
 module Unixext = Xapi_stdext_unix.Unixext
 

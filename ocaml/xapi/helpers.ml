@@ -2041,11 +2041,26 @@ let update_ca_bundle =
           )
     )
 
+(** {pp_hash hash} outputs the hexadecimal representation of the {hash}
+  adding a semicolon between every octet, in uppercase.
+*)
+let pp_hash hash =
+  let hex = Hex.(show @@ of_cstruct hash) in
+  let length = (3 * String.length hex / 2) - 1 in
+  let value_of i =
+    match (i + 1) mod 3 with
+    | 0 ->
+        ':'
+    | _ ->
+        Char.uppercase_ascii hex.[i - ((i + 1) / 3)]
+  in
+  String.init length value_of
+
 let external_certificate_thumbprint_of_master ?(hash_type = `Sha256) () =
   match hash_type with
   | `Sha256 ->
       Server_helpers.exec_with_new_task
-        "Get master's external certificate thumbprint" (fun __context ->
+        "Get master's external certificate Sha256 thumbprint" (fun __context ->
           let master_ref = get_master ~__context in
           let certs =
             Db.Certificate.get_records_where ~__context
@@ -2062,6 +2077,35 @@ let external_certificate_thumbprint_of_master ?(hash_type = `Sha256) () =
               None
           | (_, cert_record) :: _ ->
               Some cert_record.certificate_fingerprint
+      )
+  | `Sha1 ->
+      Server_helpers.exec_with_new_task
+        "Get master's external certificate Sha1 thumbprint" (fun __context ->
+          let master_ref = get_master ~__context in
+          call_api_functions ~__context (fun rpc session_id ->
+              try
+                let host_pem =
+                  Client.Client.Host.get_server_certificate ~rpc ~session_id
+                    ~host:master_ref
+                in
+                let host_cert =
+                  Cstruct.of_string host_pem |> X509.Certificate.decode_pem
+                in
+                match host_cert with
+                | Ok cert ->
+                    Some (X509.Certificate.fingerprint `SHA1 cert |> pp_hash)
+                | Error (`Msg err_msg) ->
+                    debug
+                      "Caught Error while decoding external certificate pem: %s"
+                      err_msg ;
+                    None
+              with Api_errors.Server_error (msg, _) ->
+                debug
+                  "Caught Server_error while fetching master's external \
+                   certificate: %s"
+                  msg ;
+                None
+          )
       )
   | _ ->
       None
