@@ -608,8 +608,8 @@ let revalidate_all_sessions ~__context =
     debug "Unexpected exception while revalidating external sessions: %s"
       (ExnHelper.string_of_exn e)
 
-let login_no_password_common ~__context ~uname ~originator ~host ~pool
-    ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
+let login_no_password_common_create_session ~__context ~uname ~originator ~host
+    ~pool ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
     ~rbac_permissions ~db_ref ~client_certificate =
   Context.with_tracing ~originator ~__context __FUNCTION__ @@ fun __context ->
   let create_session () =
@@ -659,6 +659,27 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
   let rpc = Helpers.make_rpc ~__context in
   ignore (Client.Pool.get_all ~rpc ~session_id) ;
   session_id
+
+let login_no_password_common ~__context ~uname ~originator ~host ~pool
+    ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
+    ~rbac_permissions ~db_ref ~client_certificate =
+  let reusable_session_id =
+    if
+      originator = xapi_internal_originator
+      && is_local_superuser
+      && pool
+      && Option.is_none uname
+    then
+      try Some (Context.get_session_id __context) with Failure _ -> None
+    else
+      None
+  in
+  Option.value reusable_session_id
+    ~default:
+      (login_no_password_common_create_session ~__context ~uname ~originator
+         ~host ~pool ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
+         ~rbac_permissions ~db_ref ~client_certificate
+      )
 
 (* XXX: only used internally by the code which grants the guest access to the API.
    Needs to be protected by a proper access control system *)
