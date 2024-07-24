@@ -664,15 +664,12 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
     ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
     ~rbac_permissions ~db_ref ~client_certificate =
   let reusable_session_id =
-    if
-      originator = xapi_internal_originator
-      && is_local_superuser
-      && pool
-      && Option.is_none uname
-    then
+    match (originator, is_local_superuser, pool, uname) with
+    | xapi_internal_originator, true, true, None -> (
       try Some (Context.get_session_id __context) with Failure _ -> None
-    else
-      None
+    )
+    | _ ->
+        None
   in
   Option.value reusable_session_id
     ~default:
