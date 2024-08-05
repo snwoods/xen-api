@@ -16,6 +16,8 @@ module D = Debug.Make (struct let name = "rbac" end)
 
 open D
 
+let ( let@ ) f x = f x
+
 let trackid session_id = Context.trackid_of_session (Some session_id)
 
 (* From the Requirements:
@@ -183,6 +185,7 @@ let nofn () = ()
 
 let check ?(extra_dmsg = "") ?(extra_msg = "") ?args ?(keys = []) ~__context ~fn
     session_id action =
+  let@ __context = Context.with_tracing ~__context __FUNCTION__ in
   let permission = permission_of_action action ?args ~keys in
   if is_access_allowed ~__context ~session_id ~permission then (
     (* allow access to action *)
