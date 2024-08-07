@@ -19,6 +19,8 @@ module D = Debug.Make (struct let name = "session_check" end)
 
 open D
 
+let ( let@ ) f x = f x
+
 (* Allows us to hook in an optional "local session" predicate *)
 let check_local_session_hook = ref None
 
@@ -28,7 +30,19 @@ let is_local_session __context session_id =
     !check_local_session_hook
 
 (* intra_pool_only is true iff the call that's invoking this check can only be called from host<->host intra-pool communication *)
-let check ~intra_pool_only ~session_id ~action =
+let check ~traceparent ~intra_pool_only ~session_id ~action =
+  let parent =
+    match traceparent with
+    | None ->
+        None
+    | Some traceparent ->
+        let open Tracing in
+        let ( let* ) = Option.bind in
+        let* span_context = SpanContext.of_traceparent traceparent in
+        let span = Tracer.span_of_span_context span_context "req.uri" in
+        Some span
+  in
+  let@ span = Tracing.with_child_trace parent ~name:__FUNCTION__ in
   Server_helpers.exec_with_new_task ~quiet:true "session_check"
     (fun __context ->
       (* First see if this is a "local" session *)
