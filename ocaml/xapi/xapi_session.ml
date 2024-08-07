@@ -609,8 +609,8 @@ let revalidate_all_sessions ~__context =
     debug "Unexpected exception while revalidating external sessions: %s"
       (ExnHelper.string_of_exn e)
 
-let login_no_password_common ~__context ~uname ~originator ~host ~pool
-    ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
+let login_no_password_common_create_session ~__context ~uname ~originator ~host
+    ~pool ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
     ~rbac_permissions ~db_ref ~client_certificate =
   Context.with_tracing ~originator ~__context __FUNCTION__ @@ fun __context ->
   let create_session () =
@@ -660,6 +660,53 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
   let rpc = Helpers.make_rpc ~__context in
   ignore (Client.Pool.get_all ~rpc ~session_id) ;
   session_id
+
+let reusable_pool_session = ref Ref.null
+
+let login_no_password_common ~__context ~uname ~originator ~host ~pool
+    ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
+    ~rbac_permissions ~db_ref ~client_certificate =
+  let internal_xapi_master_to_xapi_slave_login =
+    (xapi_internal_originator, true, true, None)
+  in
+  info
+    "Attempting session reuse pool=%b uname=%s originator=%s \
+     is_local_superuser=%b"
+    pool
+    (Option.value uname ~default:"")
+    originator is_local_superuser ;
+  let is_valid_session session_id =
+    try
+      (* Call an API function to check the session is still valid *)
+      let rpc = Helpers.make_rpc ~__context in
+      ignore (Client.Pool.get_all ~rpc ~session_id) ;
+      true
+    with Api_errors.Server_error (err, _) ->
+      info "Invalid session: %s" err ;
+      false
+  in
+  let create_session () =
+    let new_session_id =
+      login_no_password_common_create_session ~__context ~uname ~originator
+        ~host ~pool ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
+        ~rbac_permissions ~db_ref ~client_certificate
+    in
+    new_session_id
+  in
+  match (originator, pool, is_local_superuser, uname) with
+  | x when x = internal_xapi_master_to_xapi_slave_login ->
+      if
+        !reusable_pool_session <> Ref.null
+        && is_valid_session !reusable_pool_session
+      then (
+        !reusable_pool_session
+      ) else (
+        let new_session_id = create_session () in
+        reusable_pool_session := new_session_id ;
+        new_session_id
+      )
+  | _ ->
+      create_session ()
 
 (* XXX: only used internally by the code which grants the guest access to the API.
    Needs to be protected by a proper access control system *)
