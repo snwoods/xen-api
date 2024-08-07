@@ -1065,6 +1065,8 @@ let pool_recommendations_dir = ref "/etc/xapi.pool-recommendations.d"
 
 let disable_webserver = ref false
 
+let reuse_pool_sessions = ref true
+
 let test_open = ref 0
 
 let xapi_globs_spec =
@@ -1630,6 +1632,11 @@ let other_options =
     , Arg.Set_string driver_tool
     , (fun () -> !driver_tool)
     , "Path to drivertool for selecting host driver variants"
+    )
+  ; ( "reuse-pool-sessions"
+    , Arg.Set reuse_pool_sessions
+    , (fun () -> string_of_bool !reuse_pool_sessions)
+    , "Enable the reuse of pool sessions"
     )
   ]
 
