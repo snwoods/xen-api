@@ -609,6 +609,53 @@ let revalidate_all_sessions ~__context =
     debug "Unexpected exception while revalidating external sessions: %s"
       (ExnHelper.string_of_exn e)
 
+let pp_session_record ~__context ~session_id =
+  let sesh_rec = Db.Session.get_record ~__context ~self:session_id in
+  let task_names =
+    if sesh_rec.session_tasks = [] then
+      "tasks: None"
+    else
+      (List.fold_left
+        (fun output task_ref ->
+          let task_name =
+            (Db.Task.get_record ~__context ~self:task_ref).task_name_label
+          in
+          output ^ task_name ^ ","
+        )
+        "[" sesh_rec.session_tasks)
+      ^ "]"
+  in
+  let pp_other_config other_config =
+    (List.fold_left (fun acc (k, v) ->
+      acc ^ Printf.sprintf "%s: %s, " k v
+    ) "[" other_config)
+    ^ "]"
+  in
+  let pp_rbac rbac_perms =
+    Printf.sprintf "[%s]" (String.concat ", " rbac_perms)
+  in
+  info
+    "Session record: ref=%s uuid=%s last_active=%s validation_time=%s auth_user_sid=%s \
+     auth_user_name=%s rbac_permissions=%s client_cert=%b parent=%s pool=%b originator=%s \
+     is_local_superuser=%b other_config=%s tasks=%s subject=%s this_host=%s this_user=%s"
+    (Ref.string_of session_id)
+    sesh_rec.session_uuid
+    (Date.to_string sesh_rec.session_last_active)
+    (Date.to_string sesh_rec.session_validation_time)
+    sesh_rec.session_auth_user_sid
+    sesh_rec.session_auth_user_name
+    (pp_rbac sesh_rec.session_rbac_permissions)
+    sesh_rec.session_client_certificate
+    (Ref.string_of sesh_rec.session_parent)
+    sesh_rec.session_pool
+    sesh_rec.session_originator
+    sesh_rec.session_is_local_superuser
+    (pp_other_config sesh_rec.session_other_config)
+    task_names
+    (Ref.string_of sesh_rec.session_subject)
+    (Ref.string_of sesh_rec.session_this_host)
+    (Ref.string_of sesh_rec.session_this_user)
+
 let login_no_password_common_create_session ~__context ~uname ~originator ~host
     ~pool ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
     ~rbac_permissions ~db_ref ~client_certificate =
@@ -659,6 +706,7 @@ let login_no_password_common_create_session ~__context ~uname ~originator ~host
   (* Force the time to be updated by calling an API function with this session *)
   let rpc = Helpers.make_rpc ~__context in
   ignore (Client.Pool.get_all ~rpc ~session_id) ;
+  info "Created new session_id: %s" (Ref.string_of session_id) ;
   session_id
 
 let reusable_pool_session = ref Ref.null
@@ -691,22 +739,31 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
         ~host ~pool ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
         ~rbac_permissions ~db_ref ~client_certificate
     in
+    pp_session_record ~__context ~session_id:new_session_id ;
     new_session_id
   in
   match (originator, pool, is_local_superuser, uname) with
   | x when x = internal_xapi_master_to_xapi_slave_login ->
+      if !reusable_pool_session <> Ref.null then (
+        info "Reusable session:" ;
+        pp_session_record ~__context ~session_id:!reusable_pool_session ;
+      ) else
+        info "No reusable session." ;
       if
         !reusable_pool_session <> Ref.null
         && is_valid_session !reusable_pool_session
       then (
+        info "Got a session! %s" (Ref.string_of !reusable_pool_session) ;
         !reusable_pool_session
       ) else (
+        info "Creating new reusable session_id" ;
         let new_session_id = create_session () in
         reusable_pool_session := new_session_id ;
+        info  "Reusable session is now: %s" (Ref.string_of !reusable_pool_session) ;
         new_session_id
       )
   | _ ->
-      create_session ()
+      info "Did not match" ; create_session ()
 
 (* XXX: only used internally by the code which grants the guest access to the API.
    Needs to be protected by a proper access control system *)
