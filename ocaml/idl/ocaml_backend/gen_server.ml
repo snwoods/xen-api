@@ -301,7 +301,7 @@ let operation (obj : obj) (x : message) =
     if x.msg_session then
       [
         Printf.sprintf
-          {|Session_check.check ~intra_pool_only:%b ~session_id ~action:"%s";|}
+          {|Session_check.check ~traceparent:http_req.traceparent ~intra_pool_only:%b ~session_id ~action:"%s";|}
           x.msg_pool_internal wire_name
       ]
     else
@@ -532,8 +532,8 @@ let gen_module api : O.Module.t =
                  ; "      (* based on the Host.call_extension call *)"
                  ; "      let action = \"Host.call_extension\" in"
                  ; "      let session_id = ref_session_of_rpc session_id_rpc in"
-                 ; "      Session_check.check ~intra_pool_only:false \
-                    ~session_id ~action;"
+                 ; "      Session_check.check ~traceparent:None \
+                    ~intra_pool_only:false ~session_id ~action;"
                  ; "      let call_rpc = Rpc.String __call in "
                  ; "      let arg_names_values ="
                  ; "        [(\"session_id\", session_id_rpc); (__call, \
