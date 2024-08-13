@@ -655,7 +655,7 @@ let pp_session_record ~__context ~session_id =
       (Ref.string_of sesh_rec.session_this_host)
       (Ref.string_of sesh_rec.session_this_user)
   with Db_exn.DBCache_NotFound ("missing row", _, _) ->
-    info "Session record forgotten from DB"
+    info "Session record %s forgotten from DB" (Ref.string_of session_id)
 
 let login_no_password_common_create_session ~__context ~uname ~originator ~host
     ~pool ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
@@ -1286,7 +1286,12 @@ let change_password ~__context ~old_pwd ~new_pwd =
 let logout ~__context =
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
   let session_id = Context.get_session_id __context in
-  destroy_db_session ~__context ~self:session_id
+  if session_id = !reusable_pool_session then
+    info "Not destroying db as %s session found" (Ref.string_of session_id)
+  else (
+    info "Destroying db, session not found" ;
+    destroy_db_session ~__context ~self:session_id
+  )
 
 let local_logout ~__context =
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
