@@ -34,6 +34,7 @@
     threads.posix
     http_lib
     httpsvr
+    tracing
     uuid
     xapi-backtrace
     xapi-datamodel

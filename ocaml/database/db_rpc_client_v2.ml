@@ -98,7 +98,7 @@ functor
       | _ ->
           raise Remote_db_server_returned_bad_message
 
-    let write_field _ a b c d =
+    let write_field ?span _ a b c d =
       match process (Request.Write_field (a, b, c, d)) with
       | Response.Write_field y ->
           y
