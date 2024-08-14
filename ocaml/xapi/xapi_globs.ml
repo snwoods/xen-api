@@ -1042,6 +1042,8 @@ let pool_recommendations_dir = ref "/etc/xapi.pool-recommendations.d"
 
 let disable_webserver = ref false
 
+let reuse_pool_sessions = ref false
+
 let test_open = ref 0
 
 let xapi_globs_spec =
@@ -1591,6 +1593,11 @@ let other_options =
     , Arg.Set disable_webserver
     , (fun () -> string_of_bool !disable_webserver)
     , "Disable the host webserver"
+    )
+  ; ( "reuse-pool-sessions"
+    , Arg.Set reuse_pool_sessions
+    , (fun () -> string_of_bool !reuse_pool_sessions)
+    , "Enable the reuse of pool sessions"
     )
   ]
 

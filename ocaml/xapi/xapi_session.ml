@@ -636,10 +636,11 @@ let pp_session_record ~__context ~session_id =
       Printf.sprintf "[%s]" (String.concat ", " rbac_perms)
     in
     info
-      "Session record: ref=%s uuid=%s last_active=%s validation_time=%s \
+      "Session record: %s ref=%s uuid=%s last_active=%s validation_time=%s \
        auth_user_sid=%s auth_user_name=%s rbac_permissions=%s client_cert=%b \
        parent=%s pool=%b originator=%s is_local_superuser=%b other_config=%s \
        tasks=%s subject=%s this_host=%s this_user=%s"
+      (trackid session_id)
       (Ref.string_of session_id) sesh_rec.session_uuid
       (Date.to_string sesh_rec.session_last_active)
       (Date.to_string sesh_rec.session_validation_time)
@@ -744,7 +745,7 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
     new_session_id
   in
   match (originator, pool, is_local_superuser, uname) with
-  | x when x = internal_xapi_master_to_xapi_slave_login ->
+  | x when !Xapi_globs.reuse_pool_sessions && x = internal_xapi_master_to_xapi_slave_login ->
       if !reusable_pool_session <> Ref.null then (
         info "Reusable session:" ;
         pp_session_record ~__context ~session_id:!reusable_pool_session
