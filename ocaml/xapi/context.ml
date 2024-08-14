@@ -61,6 +61,8 @@ let complete_tracing ?error __context =
 
 let tracing_of __context = __context.tracing
 
+let update_tracing __context span = __context.tracing <- span
+
 let set_client_span __context =
   let span =
     Option.map

@@ -24,7 +24,10 @@ let get_database = function
   | Remote ->
       raise Database_not_in_memory
 
-let update_database t f =
+let ( let@ ) f x = f x
+
+let update_database ?span t f =
+  let@ _ = Tracing.with_child_trace span ~name:__FUNCTION__ in
   match t with
   | In_memory x ->
       let d : Db_cache_types.Database.t = f (get_database t) in

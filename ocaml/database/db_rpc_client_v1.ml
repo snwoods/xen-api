@@ -100,7 +100,7 @@ functor
       do_remote_call marshall_delete_row_args unmarshall_delete_row_response
         "delete_row" (x, y)
 
-    let write_field _ a b c d =
+    let write_field ?span _ a b c d =
       do_remote_call marshall_write_field_args unmarshall_write_field_response
         "write_field" (a, b, c, d)
 

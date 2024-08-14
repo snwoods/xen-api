@@ -67,6 +67,7 @@ let check ~traceparent ~intra_pool_only ~session_id ~action =
           if (not pool) && not (Pool_role.is_master ()) then
             raise Non_master_login_on_slave ;
           if Pool_role.is_master () then
+            let () = Context.update_tracing __context span in
             Db_actions.DB_Action.Session.set_last_active ~__context
               ~self:session_id
               ~value:(Xapi_stdext_date.Date.of_float (Unix.time ()))

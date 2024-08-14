@@ -68,7 +68,14 @@ module type DB_ACCESS = sig
   val delete_row : Db_ref.t -> string -> string -> unit
   (** [delete_row context tbl ref] deletes row [ref] from table [tbl] *)
 
-  val write_field : Db_ref.t -> string -> string -> string -> string -> unit
+  val write_field :
+       ?span:Tracing.Span.t
+    -> Db_ref.t
+    -> string
+    -> string
+    -> string
+    -> string
+    -> unit
   (** [write_field context tbl ref fld val] changes field [fld] to [val] in
       		row [ref] in table [tbl] *)
 

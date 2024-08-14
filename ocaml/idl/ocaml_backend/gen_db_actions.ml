@@ -270,7 +270,9 @@ let ocaml_of_tbl_fields xs =
 
 let open_db_module =
   [
-    "let __t = Context.database_of __context in"
+    "let@ span = Tracing.with_child_trace (Context.tracing_of __context)\n\
+    \                ~name:__FUNCTION__ in"
+  ; "let __t = Context.database_of __context in"
   ; "let module DB = (val (Xapi_database.Db_cache.get __t) : \
      Xapi_database.Db_interface.DB_ACCESS) in"
   ]
@@ -391,7 +393,7 @@ let db_action api : O.Module.t =
     let body =
       match tag with
       | FromField (Setter, fld) ->
-          Printf.sprintf "DB.write_field __t \"%s\" %s \"%s\" value"
+          Printf.sprintf "DB.write_field ?span __t \"%s\" %s \"%s\" value"
             (Escaping.escape_obj obj.DT.name)
             Client._self
             (Escaping.escape_id fld.DT.full_name)
@@ -587,6 +589,7 @@ let db_action api : O.Module.t =
         "open Xapi_database.Db_cache_types"
       ; "module D=Debug.Make(struct let name=\"db\" end)"
       ; "open D"
+      ; "let (let@) f x = f x"
       ]
     ~elements:(List.map (fun x -> O.Module.Module x) modules)
     ()

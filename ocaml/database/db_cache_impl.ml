@@ -32,6 +32,8 @@ module W = Debug.Make (struct let name = "db_write" end)
 open Db_cache_types
 open Db_ref
 
+let ( let@ ) f x = f x
+
 let fist_delay_read_records_where = ref false
 
 (* Only needed by the DB_ACCESS signature *)
@@ -70,7 +72,8 @@ let ensure_utf8_xml string =
   prefix
 
 (* Write field in cache *)
-let write_field_locked t tblname objref fldname newval =
+let write_field_locked ?span t tblname objref fldname newval =
+  let@ span = Tracing.with_child_trace span ~name:__FUNCTION__ in
   let current_val = get_field tblname objref fldname (get_database t) in
   if current_val <> newval then (
     ( match newval with
@@ -80,18 +83,20 @@ let write_field_locked t tblname objref fldname newval =
     | _ ->
         ()
     ) ;
-    update_database t (set_field tblname objref fldname newval) ;
+    update_database ?span t (set_field tblname objref fldname newval) ;
+    let@ _ = Tracing.with_child_trace span ~name:"Database.notify" in
     Database.notify
       (WriteField (tblname, objref, fldname, current_val, newval))
       (get_database t)
   )
 
-let write_field t tblname objref fldname newval =
+let write_field ?span t tblname objref fldname newval =
+  let@ span = Tracing.with_child_trace span ~name:__FUNCTION__ in
   let db = get_database t in
   let schema = Schema.table tblname (Database.schema db) in
   let column = Schema.Table.find fldname schema in
   let newval = Schema.Value.unmarshal column.Schema.Column.ty newval in
-  with_lock (fun () -> write_field_locked t tblname objref fldname newval)
+  with_lock (fun () -> write_field_locked ?span t tblname objref fldname newval)
 
 let touch_row t tblname objref =
   update_database t (touch tblname objref) ;
