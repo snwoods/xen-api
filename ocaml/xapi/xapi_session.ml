@@ -398,19 +398,26 @@ let is_subject_suspended ~__context ~cache subject_identifier =
     debug "Subject identifier %s is suspended" subject_identifier ;
   (is_suspended, subject_name)
 
+let reusable_pool_session = ref Ref.null
+
 let destroy_db_session ~__context ~self =
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
-  Xapi_event.on_session_deleted self ;
-  (* unregister from the event system *)
-  (* This info line is important for tracking, auditability and client accountability purposes on XenServer *)
-  (* Never print the session id nor uuid: they are secret values that should be known only to the user that *)
-  (* logged in. Instead, we print a non-invertible hash as the tracking id for the session id *)
-  (* see also task creation in context.ml *)
-  (* CP-982: create tracking id in log files to link username to actions *)
-  info "Session.destroy %s" (trackid self) ;
-  Rbac_audit.session_destroy ~__context ~session_id:self ;
-  (try Db.Session.destroy ~__context ~self with _ -> ()) ;
-  Rbac.destroy_session_permissions_tbl ~session_id:self
+  if self = !reusable_pool_session then
+    info "Not destroying db as %s session found" (Ref.string_of self)
+  else (
+    info "Destroying db, session not found" ;
+    Xapi_event.on_session_deleted self ;
+    (* unregister from the event system *)
+    (* This info line is important for tracking, auditability and client accountability purposes on XenServer *)
+    (* Never print the session id nor uuid: they are secret values that should be known only to the user that *)
+    (* logged in. Instead, we print a non-invertible hash as the tracking id for the session id *)
+    (* see also task creation in context.ml *)
+    (* CP-982: create tracking id in log files to link username to actions *)
+    info "Session.destroy %s" (trackid self) ;
+    Rbac_audit.session_destroy ~__context ~session_id:self ;
+    (try Db.Session.destroy ~__context ~self with _ -> ()) ;
+    Rbac.destroy_session_permissions_tbl ~session_id:self
+  )
 
 (* CP-703: ensure that activate sessions are invalidated in a bounded time *)
 (* in response to external authentication/directory services updates, such as *)
@@ -710,8 +717,6 @@ let login_no_password_common_create_session ~__context ~uname ~originator ~host
   ignore (Client.Pool.get_all ~rpc ~session_id) ;
   info "Created new session_id: %s" (Ref.string_of session_id) ;
   session_id
-
-let reusable_pool_session = ref Ref.null
 
 let login_no_password_common ~__context ~uname ~originator ~host ~pool
     ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
@@ -1287,12 +1292,7 @@ let change_password ~__context ~old_pwd ~new_pwd =
 let logout ~__context =
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
   let session_id = Context.get_session_id __context in
-  if session_id = !reusable_pool_session then
-    info "Not destroying db as %s session found" (Ref.string_of session_id)
-  else (
-    info "Destroying db, session not found" ;
-    destroy_db_session ~__context ~self:session_id
-  )
+  destroy_db_session ~__context ~self:session_id
 
 let local_logout ~__context =
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
