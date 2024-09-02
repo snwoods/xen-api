@@ -308,7 +308,7 @@ module Spans = struct
 
   let spans = Hashtbl.create 100
 
-  let span_count () =
+  let trace_count () =
     Xapi_stdext_threads.Threadext.Mutex.execute lock (fun () ->
         Hashtbl.length spans
     )
@@ -368,7 +368,7 @@ module Spans = struct
             if List.length span_list < Atomic.get max_spans then
               Hashtbl.replace spans key (span :: span_list)
             else
-              debug "%s exceeded max traces when adding to span table"
+              debug "%s exceeded max spans when adding to span table"
                 __FUNCTION__
     )
 
@@ -405,7 +405,7 @@ module Spans = struct
             if List.length span_list < Atomic.get max_spans then
               Hashtbl.replace finished_spans key (span :: span_list)
             else
-              debug "%s exceeded max traces when adding to finished span table"
+              debug "%s exceeded max spans when adding to finished span table"
                 __FUNCTION__
     )
 

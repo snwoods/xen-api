@@ -256,7 +256,7 @@ module Destination = struct
               ("export.span.count", all_spans |> List.length |> string_of_int)
             ; ("export.endpoint", endpoint_to_string endpoint)
             ; ( "xs.tracing.spans_table.count"
-              , Spans.span_count () |> string_of_int
+              , Spans.trace_count () |> string_of_int
               )
             ; ( "xs.tracing.finished_spans_table.count"
               , traces |> Hashtbl.length |> string_of_int

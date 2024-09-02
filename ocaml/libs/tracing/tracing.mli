@@ -103,7 +103,7 @@ module Spans : sig
 
   val set_max_traces : int -> unit
 
-  val span_count : unit -> int
+  val trace_count : unit -> int
 
   val since : unit -> (string, Span.t list) Hashtbl.t
 
