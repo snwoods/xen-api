@@ -443,69 +443,75 @@ let request_of_bio_exn ~proxy_seen ~read_timeout ~total_timeout ~max_length bio
 (** [request_of_bio ic] returns [Some req] read from [ic], or [None]. If [None] it will have
     	already sent back a suitable error code and response to the client. *)
 let request_of_bio ?proxy_seen ~read_timeout ~total_timeout ~max_length ic =
-  try
-    let tracer = Tracing.Tracer.get_tracer ~name:"http_tracer" in
-    let loop_span =
-      match Tracing.Tracer.start ~tracer ~name:__FUNCTION__ ~parent:None () with
-      | Ok span ->
-          span
-      | Error _ ->
-          None
-    in
-    let r, proxy =
-      request_of_bio_exn ~proxy_seen ~read_timeout ~total_timeout ~max_length ic
-    in
-    let parent_span = Http.Request.traceparent_of r in
-    let loop_span =
-      Option.fold ~none:None
-        ~some:(fun span ->
-          Tracing.Tracer.update_span_with_parent span parent_span
-        )
-        loop_span
-    in
-    let _ : (Tracing.Span.t option, exn) result =
-      Tracing.Tracer.finish loop_span
-    in
-    (Some r, proxy)
-  with e ->
-    D.warn "%s (%s)" (Printexc.to_string e) __LOC__ ;
-    best_effort (fun () ->
-        let ss = Buf_io.fd_of ic in
-        match e with
-        (* Specific errors thrown during parsing *)
-        | Http.Http_parse_failure ->
-            response_internal_error e ss
-              ~extra:"The HTTP headers could not be parsed." ;
-            debug "Error parsing HTTP headers"
-        | Buf_io.Timeout ->
-            ()
-        (* Idle connection closed. NB infinite timeout used when headers are being read *)
-        | Buf_io.Eof ->
-            ()
-        (* Connection terminated *)
-        | Buf_io.Line _ ->
-            response_internal_error e ss
-              ~extra:"One of the header lines was too long."
-        (* Generic errors thrown during parsing *)
-        | End_of_file ->
-            ()
-        | Unix.Unix_error (Unix.EAGAIN, _, _) | Http.Timeout ->
-            response_request_timeout ss
-        | Http.Too_large ->
-            response_request_header_fields_too_large ss
-        (* Premature termination of connection! *)
-        | Unix.Unix_error (a, b, c) ->
-            response_internal_error e ss
-              ~extra:
-                (Printf.sprintf "Got UNIX error: %s %s %s"
-                   (Unix.error_message a) b c
-                )
-        | exc ->
-            response_internal_error exc ss
-              ~extra:(escape (Printexc.to_string exc)) ;
-            log_backtrace ()
-    ) ;
-    (None, None)
+  let tracer = Tracing.Tracer.get_tracer ~name:"http_tracer" in
+  let loop_span =
+    match Tracing.Tracer.start ~tracer ~name:__FUNCTION__ ~parent:None () with
+    | Ok span ->
+        ref span
+    | Error _ ->
+        ref None
+  in
+  Xapi_stdext_pervasives.Pervasiveext.finally
+    (fun () ->
+      try
+        let r, proxy =
+          request_of_bio_exn ~proxy_seen ~read_timeout ~total_timeout
+            ~max_length ic
+        in
+        let parent_span = Http.Request.traceparent_of r in
+        loop_span :=
+          Option.fold ~none:None
+            ~some:(fun span ->
+              Tracing.Tracer.update_span_with_parent span parent_span
+            )
+            !loop_span ;
+        (Some r, proxy)
+      with e ->
+        D.warn "%s (%s)" (Printexc.to_string e) __LOC__ ;
+        best_effort (fun () ->
+            let ss = Buf_io.fd_of ic in
+            match e with
+            (* Specific errors thrown during parsing *)
+            | Http.Http_parse_failure ->
+                response_internal_error e ss
+                  ~extra:"The HTTP headers could not be parsed." ;
+                debug "Error parsing HTTP headers"
+            | Buf_io.Timeout ->
+                ()
+            (* Idle connection closed. NB infinite timeout used when headers are being read *)
+            | Buf_io.Eof ->
+                ()
+            (* Connection terminated *)
+            | Buf_io.Line _ ->
+                response_internal_error e ss
+                  ~extra:"One of the header lines was too long."
+            (* Generic errors thrown during parsing *)
+            | End_of_file ->
+                ()
+            | Unix.Unix_error (Unix.EAGAIN, _, _) | Http.Timeout ->
+                response_request_timeout ss
+            | Http.Too_large ->
+                response_request_header_fields_too_large ss
+            (* Premature termination of connection! *)
+            | Unix.Unix_error (a, b, c) ->
+                response_internal_error e ss
+                  ~extra:
+                    (Printf.sprintf "Got UNIX error: %s %s %s"
+                       (Unix.error_message a) b c
+                    )
+            | exc ->
+                response_internal_error exc ss
+                  ~extra:(escape (Printexc.to_string exc)) ;
+                log_backtrace ()
+        ) ;
+        (None, None)
+    )
+    (fun () ->
+      let _ : (Tracing.Span.t option, exn) result =
+        Tracing.Tracer.finish !loop_span
+      in
+      ()
+    )
 
 let handle_one (x : 'a Server.t) ss context req =
   let@ req = Http.Request.with_tracing ~name:__FUNCTION__ req in
