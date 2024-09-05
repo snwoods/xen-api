@@ -334,6 +334,27 @@ module Spans = struct
     )
 
   let add_to_spans ~(span : Span.t) =
+    let histogram_of my_hashtbl =
+      let span_names = Hashtbl.create 1000 in
+      let name_of Span.{name; _} = name in
+      my_hashtbl
+      |> Hashtbl.iter (fun _ span_list ->
+             span_list
+             |> List.map name_of
+             |> List.iter (fun span_name ->
+                    let count =
+                      try Hashtbl.find span_names span_name
+                      with Not_found -> 0
+                    in
+                    Hashtbl.replace span_names span_name (count + 1)
+                )
+         ) ;
+      Hashtbl.fold
+        (fun span_name count acc ->
+          acc ^ Printf.sprintf "%s: %d\n" span_name count
+        )
+        span_names "Histogram of spans:\n-------------------\n"
+    in
     let key = span.context.trace_id in
     Xapi_stdext_threads.Threadext.Mutex.execute lock (fun () ->
         match Hashtbl.find_opt spans key with
@@ -341,8 +362,8 @@ module Spans = struct
             if Hashtbl.length spans < Atomic.get max_traces then
               Hashtbl.add spans key [span]
             else
-              debug "%s exceeded max traces when adding to span table"
-                __FUNCTION__
+              debug "%s exceeded max traces when adding to span table\n%s"
+                __FUNCTION__ (histogram_of spans)
         | Some span_list ->
             if List.length span_list < Atomic.get max_spans then
               Hashtbl.replace spans key (span :: span_list)
