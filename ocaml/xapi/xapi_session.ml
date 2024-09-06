@@ -693,13 +693,22 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
     new_session_id
   in
   match (originator, pool, is_local_superuser, uname) with
-  | x when !Xapi_globs.reuse_pool_sessions && x = internal_xapi_master_to_xapi_slave_login ->
-      if
-        !reusable_pool_session <> Ref.null
-        && is_valid_session !reusable_pool_session
-      then (
-        !reusable_pool_session
+  | x
+    when !Xapi_globs.reuse_pool_sessions
+         && x = internal_xapi_master_to_xapi_slave_login ->
+      if !reusable_pool_session <> Ref.null then (
+        debug "Trying reusable session: %s"
+          (Ref.string_of !reusable_pool_session) ;
+        if is_valid_session !reusable_pool_session then (
+          debug "Reusing session!" ; !reusable_pool_session
+        ) else (
+          debug "Reusable session invalid" ;
+          let new_session_id = create_session () in
+          reusable_pool_session := new_session_id ;
+          new_session_id
+        )
       ) else (
+        debug "reuse_pool_sessions is false" ;
         let new_session_id = create_session () in
         reusable_pool_session := new_session_id ;
         new_session_id
