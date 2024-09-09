@@ -699,13 +699,19 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
       if !reusable_pool_session <> Ref.null then (
         debug "Trying reusable session: %s"
           (Ref.string_of !reusable_pool_session) ;
-        if is_valid_session !reusable_pool_session then (
-          debug "Reusing session!" ; !reusable_pool_session
-        ) else (
-          debug "Reusable session invalid" ;
-          let new_session_id = create_session () in
-          reusable_pool_session := new_session_id ;
-          new_session_id
+        if !Xapi_globs.validate_reusable_pool_session then
+          if is_valid_session !reusable_pool_session then (
+            debug "Reusing session (check)!" ;
+            !reusable_pool_session
+          ) else (
+            debug "Reusable session invalid" ;
+            let new_session_id = create_session () in
+            reusable_pool_session := new_session_id ;
+            new_session_id
+          )
+        else (
+          debug "Reusing session (no check)!" ;
+          !reusable_pool_session
         )
       ) else (
         debug "reuse_pool_sessions is false" ;
