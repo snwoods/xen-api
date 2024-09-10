@@ -671,6 +671,7 @@ let login_no_password_common_create_session ~__context ~uname ~originator ~host
 let login_no_password_common ~__context ~uname ~originator ~host ~pool
     ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
     ~rbac_permissions ~db_ref ~client_certificate =
+  Context.with_tracing ~originator ~__context __FUNCTION__ @@ fun __context ->
   let internal_xapi_master_to_xapi_slave_login =
     (xapi_internal_originator, true, true, None)
   in
