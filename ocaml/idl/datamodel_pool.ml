@@ -851,9 +851,24 @@ let certificate_uninstall =
 let uninstall_ca_certificate =
   call ~name:"uninstall_ca_certificate"
     ~doc:"Remove a pool-wide TLS CA certificate."
-    ~params:[(String, "name", "The certificate name")]
+    ~params:
+      [
+        (String, "name", "The certificate name")
+      ; ( Bool
+        , "force"
+        , "If true, remove the DB entry even if the file is non-existent"
+        )
+      ]
     ~allowed_roles:(_R_POOL_OP ++ _R_CLIENT_CERT)
-    ~lifecycle:[(Published, "1.290.0", "Uninstall TLS CA certificate")]
+    ~lifecycle:
+      [
+        (Published, "1.290.0", "Uninstall TLS CA certificate")
+      ; ( Changed
+        , "24.31.0"
+        , "Added --force option to allow DB entries to be removed for \
+           non-existent files"
+        )
+      ]
     ()
 
 let certificate_list =
