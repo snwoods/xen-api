@@ -681,7 +681,10 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
         debug "Invalid session: %s" err ;
         false
     in
-    session_id <> Ref.null || is_valid_session session_id
+    session_id <> Ref.null
+    && ((not !Xapi_globs.validate_reusable_pool_session)
+       || is_valid_session session_id
+       )
   in
   let create_session () =
     let new_session_id =
