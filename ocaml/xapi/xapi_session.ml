@@ -692,7 +692,9 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
   let rec get_session () =
     let session = Atomic.get reusable_pool_session in
     if session <> Ref.null
-      && is_valid_session session then (
+      && ((not !Xapi_globs.validate_reusable_pool_session)
+         || is_valid_session session
+         ) then (
       (* Check if the session changed during validation.
         Use our version regardless to avoid being stuck in a loop of session creation *)
       if Atomic.get reusable_pool_session <> session then
