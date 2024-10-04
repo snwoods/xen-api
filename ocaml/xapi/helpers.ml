@@ -1526,7 +1526,7 @@ let __internal_mutex = Mutex.create ()
 
 let __number_of_queueing_threads = ref 0
 
-let max_number_of_queueing_threads = 100
+let max_number_of_queueing_threads = 1000
 
 let with_global_lock x = with_lock __internal_mutex x
 
