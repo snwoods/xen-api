@@ -398,29 +398,25 @@ let is_subject_suspended ~__context ~cache subject_identifier =
     debug "Subject identifier %s is suspended" subject_identifier ;
   (is_suspended, subject_name)
 
-let reusable_pool_session = ref Ref.null
-
-let reusable_pool_session_lock = Mutex.create ()
+let reusable_pool_session = Atomic.make Ref.null
 
 let destroy_db_session ~__context ~self =
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
-  with_lock reusable_pool_session_lock (fun () ->
-      if self <> !reusable_pool_session then (
-        Xapi_event.on_session_deleted self ;
-        (* unregister from the event system *)
-        (* This info line is important for tracking, auditability and client accountability purposes on XenServer *)
-        (* Never print the session id nor uuid: they are secret values that should be known only to the user that *)
-        (* logged in. Instead, we print a non-invertible hash as the tracking id for the session id *)
-        (* see also task creation in context.ml *)
-        (* CP-982: create tracking id in log files to link username to actions *)
-        info "Session.destroy %s" (trackid self) ;
-        Rbac_audit.session_destroy ~__context ~session_id:self ;
-        (try Db.Session.destroy ~__context ~self with _ -> ()) ;
-        Rbac.destroy_session_permissions_tbl ~session_id:self
-      ) else
-        info "Skipping Session.destroy for reusable pool session %s"
-          (trackid self)
-  )
+  if self <> Atomic.get reusable_pool_session then (
+    Xapi_event.on_session_deleted self ;
+    (* unregister from the event system *)
+    (* This info line is important for tracking, auditability and client accountability purposes on XenServer *)
+    (* Never print the session id nor uuid: they are secret values that should be known only to the user that *)
+    (* logged in. Instead, we print a non-invertible hash as the tracking id for the session id *)
+    (* see also task creation in context.ml *)
+    (* CP-982: create tracking id in log files to link username to actions *)
+    info "Session.destroy %s" (trackid self) ;
+    Rbac_audit.session_destroy ~__context ~session_id:self ;
+    (try Db.Session.destroy ~__context ~self with _ -> ()) ;
+    Rbac.destroy_session_permissions_tbl ~session_id:self
+  ) else
+    info "Skipping Session.destroy for reusable pool session %s"
+      (trackid self)
 
 (* CP-703: ensure that activate sessions are invalidated in a bounded time *)
 (* in response to external authentication/directory services updates, such as *)
@@ -693,11 +689,25 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
     in
     new_session_id
   in
+  let rec get_session () =
+    match Atomic.get reusable_pool_session with
+    | session when session <> Ref.null -> session
+    | _ ->
+       let new_session = create_session () in
+       if Atomic.compare_and_set reusable_pool_session Ref.null new_session then new_session
+      else
+        begin (* someone else raced with us and created a session, destroy ours and attempt to use theirs *)
+          destroy_db_session ~__context ~self:new_session;
+          (get_session[@tailcall]) ()
+        end
+  in
   if
     (originator, pool, is_local_superuser, uname)
     = (xapi_internal_originator, true, true, None)
     && !Xapi_globs.reuse_pool_sessions
   then
+    get_session ()
+    Atomic.compare_and_set reusable_pool_session
     with_lock reusable_pool_session_lock (fun () ->
         if
           !reusable_pool_session <> Ref.null
