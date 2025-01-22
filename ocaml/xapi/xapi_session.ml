@@ -671,16 +671,19 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
     ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
     ~rbac_permissions ~db_ref ~client_certificate =
   Context.with_tracing ~originator ~__context __FUNCTION__ @@ fun __context ->
+  info "login_no_password_common start" ;
   let is_valid_session session_id =
     try
       (* Call an API function to check the session is still valid *)
       let rpc = Helpers.make_rpc ~__context in
       ignore (Client.Pool.get_all ~rpc ~session_id) ;
+      debug "Valid session!" ;
       true
     with Api_errors.Server_error (err, _) ->
       info "Invalid session: %s" err ;
       false
   in
+  debug "checking debug messages work" ;
   let create_session () =
     let new_session_id =
       login_no_password_common_create_session ~__context ~uname ~originator
@@ -698,25 +701,37 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
       (* Check if the session changed during validation.
         Use our version regardless to avoid being stuck in a loop of session creation *)
       if Atomic.get reusable_pool_session <> session then
-        debug "reusable_pool_session has changed, using the original version anyway" ;
+        debug "reusable_pool_session has changed, using the original version anyway"
+      else
+        debug "reusable_pool_session is still valid" ;
       session
-    ) else
+    ) else (
+       debug "Session null or invalid" ;
        let new_session = create_session () in
-       if Atomic.compare_and_set reusable_pool_session Ref.null new_session then new_session
+       if Atomic.compare_and_set reusable_pool_session Ref.null new_session then (
+        debug "Created new session" ;
+        new_session
+       )
       else
         begin (* someone else raced with us and created a session, destroy ours and attempt to use theirs *)
+          debug "We've been raced, destroy and try again" ;
           destroy_db_session ~__context ~self:new_session;
           (get_session[@tailcall]) ()
         end
+    )
   in
   if
     (originator, pool, is_local_superuser, uname)
     = (xapi_internal_originator, true, true, None)
     && !Xapi_globs.reuse_pool_sessions
-  then
+  then (
+    debug "Trying to reuse session" ;
     get_session ()
-  else
+  )
+  else (
+    debug "Not able to reuse sessions: %b" !Xapi_globs.reuse_pool_sessions ;
     create_session ()
+  )
 
 (* XXX: only used internally by the code which grants the guest access to the API.
    Needs to be protected by a proper access control system *)
