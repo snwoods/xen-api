@@ -3795,7 +3795,7 @@ module VBD = struct
         )
         vm
 
-  let unplug task vm vbd force =
+  let detach task vm vbd force =
     with_xc_and_xs (fun xc xs ->
         try
           (* On destroying the datapath
@@ -3808,9 +3808,46 @@ module VBD = struct
 
              3. if the device shutdown is rejected then we should leave the DP
              alone and rely on the event thread calling us again later. *)
-          let domid = domid_of_uuid ~xs (uuid_of_string vm) in
           (* If the device is gone then we don't need to shut it down but we do
              need to free any storage resources. *)
+          let dev =
+            try
+              Some (device_by_id xc xs vm (device_kind_of ~xs vbd) (id_of vbd))
+            with
+            | Xenopsd_error (Does_not_exist (_, _)) ->
+                debug "VM = %s; VBD = %s; Ignoring missing domain" vm (id_of vbd) ;
+                None
+            | Xenopsd_error Device_not_connected ->
+                debug "VM = %s; VBD = %s; Ignoring missing device" vm (id_of vbd) ;
+                None
+          in
+          Option.iter
+            (fun dev ->
+              if force && not (Device.can_surprise_remove ~xs dev) then
+                debug
+                  "VM = %s; VBD = %s; Device is not surprise-removable \
+                   (ignoring and removing anyway)"
+                  vm (id_of vbd) ;
+              (* this happens on normal shutdown too *)
+              (* Case (1): success; Case (2): success; Case (3): an exception is
+                  thrown *)
+              Xenops_task.with_subtask task
+                (Printf.sprintf "Vbd.clean_shutdown %s" (id_of vbd))
+                (fun () ->
+                  (if force then Device.hard_shutdown else Device.clean_shutdown)
+                    task ~xs dev
+                )
+            )
+            dev
+        with Device_common.Device_error (_, s) ->
+          debug "Caught Device_error: %s" s ;
+          raise (Xenopsd_error (Device_detach_rejected ("VBD", id_of vbd, s)))
+    )
+
+  let deactivate task vm vbd force =
+    with_xc_and_xs (fun xc xs ->
+        try
+          let domid = domid_of_uuid ~xs (uuid_of_string vm) in
           let dev =
             try
               Some (device_by_id xc xs vm (device_kind_of ~xs vbd) (id_of vbd))
@@ -3839,26 +3876,6 @@ module VBD = struct
                   internal_error "Failed to unmarshal VBD backend: %s" m
             )
           in
-          Option.iter
-            (fun dev ->
-              if force && not (Device.can_surprise_remove ~xs dev) then
-                debug
-                  "VM = %s; VBD = %s; Device is not surprise-removable \
-                   (ignoring and removing anyway)"
-                  vm (id_of vbd) ;
-              (* this happens on normal shutdown too *)
-              (* Case (1): success; Case (2): success; Case (3): an exception is
-                 thrown *)
-              Xenops_task.with_subtask task
-                (Printf.sprintf "Vbd.clean_shutdown %s" (id_of vbd))
-                (fun () ->
-                  (if force then Device.hard_shutdown else Device.clean_shutdown)
-                    task ~xs dev
-                )
-            )
-            dev ;
-          (* We now have a shutdown device but an active DP: we should destroy
-             the DP if the backend is of type VDI *)
           finally
             (fun () ->
               Option.iter
