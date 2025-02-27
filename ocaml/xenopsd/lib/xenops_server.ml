@@ -2711,6 +2711,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
             ) ;
             debug "VM.migrate: Synchronisation point 1"
           in
+          (* TODO opportunistic place to talk to destination after save, e.g. send begin timestamp *)
           let final_handshake () =
             Handshake.send vm_fd Handshake.Success ;
             debug "VM.migrate: Synchronisation point 3" ;
