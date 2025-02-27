@@ -1633,6 +1633,7 @@ let suspend_emu_manager ~(task : Xenops_task.task_handle) ~xc:_ ~xs ~domain_type
   let open Suspend_image in
   let open Suspend_image.M in
   let open Emu_manager in
+  with_tracing ~task ~name:"suspend_emu_manager function start" @@ fun () ->
   let fd_uuid = Uuidx.(to_string (make ())) in
   let mode =
     match domain_type with `hvm | `pvh -> "hvm_save" | `pv -> "save"
@@ -1657,6 +1658,7 @@ let suspend_emu_manager ~(task : Xenops_task.task_handle) ~xc:_ ~xs ~domain_type
     @ List.concat flags'
     @ vgpu_cmdline
   in
+  with_tracing ~task ~name:"suspend_emu_manager with_connection" @@ fun () ->
   let fds = [(fd_uuid, main_fd)] @ vgpu_args in
   (* Start the emu-manager process and connect to the control socket *)
   with_connection task manager_path args fds (fun cnx ->
@@ -1695,6 +1697,7 @@ let suspend_emu_manager ~(task : Xenops_task.task_handle) ~xc:_ ~xs ~domain_type
       in
       (* Process started; wait for and respond to instructions *)
       let rec wait_for_message () =
+        with_tracing ~task ~name:"suspend_emu_manager wait_for_message" @@ fun () ->
         debug "VM = %s; domid = %d; waiting for emu-manager..."
           (Uuidx.to_string uuid) domid ;
         let message = non_debug_receive ~debug_callback:callback cnx in
@@ -1823,6 +1826,7 @@ let suspend (task : Xenops_task.task_handle) ~xc ~xs ~domain_type ~is_uefi ~dm
     (List.mem Live flags) ;
   let open Suspend_image in
   let open Suspend_image.M in
+  with_tracing ~task ~name:"suspend function start" @@ fun () ->
   (* Suspend image signature *)
   debug "Writing save signature: %s" save_signature ;
   Io.write main_fd save_signature ;
