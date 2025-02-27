@@ -1778,7 +1778,8 @@ module VM = struct
         if di.Xenctrl.total_memory_pages = 0n then
           raise (Xenopsd_error Domain_not_built) ;
         Domain.unpause ~xc di.Xenctrl.domid
-    )
+    ) ;
+    with_tracing ~task:t ~name:"VM_end_downtime" @@ fun () -> ()
 
   let set_xsdata task vm xsdata =
     on_domain task vm (fun _ xs _ _ di ->
@@ -2513,6 +2514,7 @@ module VM = struct
                 @@ fun () -> pre_suspend_callback task
                 ) ;
 
+                ( with_tracing ~task ~name:"VM_save_request_shutdown" @@ fun () ->
                 if
                   not
                     ( with_tracing ~task
@@ -2521,6 +2523,7 @@ module VM = struct
                     )
                 then
                   raise (Xenopsd_error Failed_to_acknowledge_suspend_request) ;
+                with_tracing ~task ~name:"VM_begin_downtime" @@ fun () -> () ;
                 if
                   not
                     ( with_tracing ~task
@@ -2529,6 +2532,7 @@ module VM = struct
                     )
                 then
                   raise (Xenopsd_error (Failed_to_suspend (vm.Vm.id, 1200.)))
+                )
             ) ;
             (* Record the final memory usage of the domain so we know how much
                to allocate for the resume *)
