@@ -409,10 +409,10 @@ module Storage = struct
   let vm_of_domid = vm_of_domid
 
   (* We need to deal with driver domains here: *)
-  let attach_and_activate ~xc:_ ~xs task vm dp sr vdi read_write =
+  let attach ~xc:_ ~xs task vm dp sr vdi read_write =
     let vmdomid = vm_of_domid (domid_of_uuid ~xs (uuid_of_string vm)) in
     let result =
-      attach_and_activate ~task ~_vm:vm ~vmdomid ~dp ~sr ~vdi ~read_write
+      attach ~task ~_vm:vm ~vmdomid ~dp ~sr ~vdi ~read_write
     in
     let backend =
       Xenops_task.with_subtask task
@@ -420,7 +420,7 @@ module Storage = struct
            (Vdi.string_of vdi)
         )
         (transform_exception (fun () ->
-             Client.Policy.get_backend_vm "attach_and_activate" vm sr vdi
+             Client.Policy.get_backend_vm "attach" vm sr vdi
          )
         )
     in
@@ -429,6 +429,10 @@ module Storage = struct
         failwith (Printf.sprintf "Driver domain disapppeared: %s" backend)
     | Some domid ->
         {domid; attach_info= result}
+
+  let activate ~xc:_ ~xs task vm dp sr vdi =
+    let vmdomid = vm_of_domid (domid_of_uuid ~xs (uuid_of_string vm)) in
+    activate ~task ~_vm:vm ~vmdomid ~dp ~sr ~vdi
 
   let deactivate = deactivate
 
@@ -504,10 +508,11 @@ let with_disk ~xc ~xs task disk write f =
         (fun () ->
           let frontend_domid = this_domid ~xs in
           let frontend_vm = get_uuid ~xc frontend_domid |> Uuidx.to_string in
-          let vdi =
-            attach_and_activate ~xc ~xs task frontend_vm dp sr vdi write
+          let attached_vdi =
+            attach ~xc ~xs task frontend_vm dp sr vdi write
           in
-          let device = create_vbd_frontend ~xc ~xs task frontend_domid vdi in
+          activate ~xc ~xs task frontend_vm dp sr vdi ;
+          let device = create_vbd_frontend ~xc ~xs task frontend_domid attached_vdi in
           finally
             (fun () ->
               match device with
@@ -3528,46 +3533,61 @@ module VBD = struct
   let vdi_attach_path vbd =
     Printf.sprintf "/xapi/%s/private/vdis/%s" (fst vbd.id) (snd vbd.id)
 
-  let attach_and_activate task xc xs frontend_domid vbd vdi =
+  let attached_vdi_from_vdi xs vdi =
+    match vdi with
+    | None ->
+      (* XXX: do something better with CDROMs *)
+      Some {
+        domid= this_domid ~xs
+      ; attach_info=
+          Storage_interface.
+            {
+              implementations=
+                [
+                  XenDisk {params= ""; extra= []; backend_type= "vbd3"}
+                ; BlockDevice {path= ""}
+                ]
+            }
+      }, ""
+    | Some (Local path) ->
+        Some {
+          domid= this_domid ~xs
+        ; attach_info=
+            Storage_interface.
+              {
+                implementations=
+                  [
+                    XenDisk {params= path; extra= []; backend_type= "vbd3"}
+                  ; BlockDevice {path}
+                  ]
+              }
+        }, ""
+    | Some (VDI path) ->
+      None, path
+
+  let attach task xc xs frontend_domid vbd vdi =
     let vdi =
-      match vdi with
-      | None ->
-          (* XXX: do something better with CDROMs *)
-          {
-            domid= this_domid ~xs
-          ; attach_info=
-              Storage_interface.
-                {
-                  implementations=
-                    [
-                      XenDisk {params= ""; extra= []; backend_type= "vbd3"}
-                    ; BlockDevice {path= ""}
-                    ]
-                }
-          }
-      | Some (Local path) ->
-          {
-            domid= this_domid ~xs
-          ; attach_info=
-              Storage_interface.
-                {
-                  implementations=
-                    [
-                      XenDisk {params= path; extra= []; backend_type= "vbd3"}
-                    ; BlockDevice {path}
-                    ]
-                }
-          }
-      | Some (VDI path) ->
-          let sr, vdi = Storage.get_disk_by_name task path in
-          let dp = Storage.id_of (string_of_int frontend_domid) vbd.id in
-          let vm = fst vbd.id in
-          Storage.attach_and_activate ~xc ~xs task vm dp sr vdi
-            (vbd.mode = ReadWrite)
+      match attached_vdi_from_vdi xs vdi with
+      | Some attached_vdi, _ -> attached_vdi
+      | None, path ->
+        let sr, vdi = Storage.get_disk_by_name task path in
+        let dp = Storage.id_of (string_of_int frontend_domid) vbd.id in
+        let vm = fst vbd.id in
+        Storage.attach ~xc ~xs task vm dp sr vdi
+          (vbd.mode = ReadWrite)
     in
     xs.Xs.write (vdi_attach_path vbd)
       (vdi |> rpc_of attached_vdi |> Jsonrpc.to_string) ;
     vdi
+
+  let activate task xc xs frontend_domid vbd vdi =
+    match attached_vdi_from_vdi xs vdi with
+    | Some attached_vdi, _ -> ()
+    | None, path ->
+      let sr, vdi = Storage.get_disk_by_name task path in
+      let dp = Storage.id_of (string_of_int frontend_domid) vbd.id in
+      let vm = fst vbd.id in
+      Storage.activate ~xc ~xs task vm dp sr vdi
 
   let frontend_domid_of_device device =
     device.Device_common.frontend.Device_common.domid
@@ -3663,8 +3683,9 @@ module VBD = struct
               vm
           else
             let vdi =
-              attach_and_activate task xc xs frontend_domid vbd vbd.backend
+              attach task xc xs frontend_domid vbd vbd.backend
             in
+            activate task xc xs frontend_domid vbd vbd.backend ;
             let params, xenstore_data, extra_keys =
               params_of_backend vdi.attach_info
             in
@@ -3921,8 +3942,9 @@ module VBD = struct
             device_by_id xc xs vm (device_kind_of ~xs vbd) (id_of vbd)
           in
           let vdi =
-            attach_and_activate task xc xs frontend_domid vbd (Some d)
+            attach task xc xs frontend_domid vbd (Some d)
           in
+          activate task xc xs frontend_domid vbd (Some d) ;
           let params, xenstore_data, _ = params_of_backend vdi.attach_info in
           let phystype = Device.Vbd.Phys in
           (* We store away the disk so we can implement VBD.stat *)
