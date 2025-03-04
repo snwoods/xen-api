@@ -645,7 +645,7 @@ module type DEVICE = sig
 
   val remove : id -> unit
 
-  val plug : id -> Task.id
+  val qwer : id -> Task.id
 
   val unplug : id -> Task.id
 
@@ -772,7 +772,9 @@ module VbdDeviceTests = DeviceTests (struct
 
   let remove = Client.VBD.remove dbg
 
-  let plug = Client.VBD.plug dbg
+  let qwer = Client.VBD.plug dbg
+
+  (* TODO probs add here *)
 
   let unplug id = Client.VBD.unplug dbg id false
 

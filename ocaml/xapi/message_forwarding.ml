@@ -5525,14 +5525,16 @@ functor
         ) ;
         update_vbd_and_vdi_operations ~__context ~vbd
 
-      let plug ~__context ~self =
-        info "VBD.plug: VBD = '%s'" (vbd_uuid ~__context self) ;
+      let qwer ~__context ~self =
+        info "VBD.qwer: VBD = '%s'" (vbd_uuid ~__context self) ;
         let local_fn = Local.VBD.plug ~self in
         let remote_fn = Client.VBD.plug ~self in
-        with_vbd_marked ~__context ~vbd:self ~doc:"VBD.plug" ~op:`plug
+        with_vbd_marked ~__context ~vbd:self ~doc:"VBD.qwer" ~op:`plug
           (fun () -> forward_vbd_op ~local_fn ~__context ~self ~remote_fn
         ) ;
         update_vbd_and_vdi_operations ~__context ~vbd:self
+
+      (* TODO probs add here *)
 
       let unplug ~__context ~self =
         info "VBD.unplug: VBD = '%s'" (vbd_uuid ~__context self) ;

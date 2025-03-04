@@ -32,7 +32,8 @@ let set_mode ~__context ~self ~value =
     ~expected:`Halted ;
   Db.VBD.set_mode ~__context ~self ~value
 
-let plug ~__context ~self =
+(*Oooh this must be it*)
+let qwer ~__context ~self =
   let vm = Db.VBD.get_VM ~__context ~self in
   let domid = Int64.to_int (Db.VM.get_domid ~__context ~self:vm) in
   let force_loopback_vbd = Helpers.force_loopback_vbd ~__context in
@@ -94,6 +95,8 @@ let plug ~__context ~self =
            (Api_errors.disk_vbd_must_be_readwrite_for_hvm, [Ref.string_of self])
         ) ;
     Xapi_xenops.vbd_plug ~__context ~self
+
+(* TODO probs add here *)
 
 let unplug ~__context ~self =
   let vm = Db.VBD.get_VM ~__context ~self in

@@ -6540,7 +6540,8 @@ module VBD = struct
       ~errs:[Api_errors.vbd_not_removable_media; Api_errors.vbd_not_empty]
       ~allowed_roles:_R_VM_OP ()
 
-  let plug =
+  (* I think this is for Local.VBD.plug? *)
+  let qwer =
     call ~name:"plug"
       ~lifecycle:
         [
@@ -6554,6 +6555,8 @@ module VBD = struct
         "Hotplug the specified VBD, dynamically attaching it to the running VM"
       ~params:[(Ref _vbd, "self", "The VBD to hotplug")]
       ~allowed_roles:_R_VM_ADMIN ()
+
+  (* TODO probs add here*)
 
   let unplug =
     call ~name:"unplug"
@@ -6713,7 +6716,8 @@ module VBD = struct
         [
           eject
         ; insert
-        ; plug
+        ; qwer
+        (* TODO probs add here *)
         ; unplug
         ; unplug_force
         ; unplug_force_no_safety_check

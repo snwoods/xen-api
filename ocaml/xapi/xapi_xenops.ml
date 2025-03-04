@@ -3968,7 +3968,7 @@ let vbd_plug ~__context ~self =
           info "xenops: VBD.add %s.%s" (fst vbd.Vbd.id) (snd vbd.Vbd.id) ;
           let id = Client.VBD.add dbg vbd in
           info "xenops: VBD.plug %s.%s" (fst vbd.Vbd.id) (snd vbd.Vbd.id) ;
-          Client.VBD.plug dbg id |> sync_with_task __context queue_name
+          Client.VBD.qwer dbg id |> sync_with_task __context queue_name
       ) ;
       if not (Db.VBD.get_currently_attached ~__context ~self) then
         Helpers.internal_error "vbd_plug: Unable to plug VBD %s"

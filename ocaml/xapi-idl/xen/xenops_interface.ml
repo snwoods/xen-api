@@ -920,9 +920,11 @@ module XenopsAPI (R : RPC) = struct
     let add =
       declare "VBD.add" [] (debug_info_p @-> vbd_t_p @-> returning vbd_id_p err)
 
-    let plug =
-      declare "VBD.plug" []
+    let qwer =
+      declare "VBD.qwer" []
         (debug_info_p @-> vbd_id_p @-> returning task_id_p err)
+
+    (* TODO probs add here *)
 
     let unplug =
       let force_p = Param.mk ~name:"force" Types.bool in

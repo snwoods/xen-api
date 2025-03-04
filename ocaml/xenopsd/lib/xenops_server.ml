@@ -2016,9 +2016,11 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       let extra_args = B.VM.get_hook_args id in
       Xenops_hooks.vm ~script ~reason ~id ~extra_args
   | VBD_plug id ->
-      debug "VBD.attach then VBD.activate %s" (VBD_DB.string_of_id id) ;
+      debug "VBD.plug try changing name %s" (VBD_DB.string_of_id id) ;
+      B.VBD.qwer t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
+      (*debug "VBD.attach then VBD.activate %s" (VBD_DB.string_of_id id) ;
       let vdi = B.VBD.attach t (VBD_DB.vm_of id) (VBD_DB.read_exn id) in
-      B.VBD.activate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) vdi ;
+      B.VBD.activate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) vdi ;*)
       VBD_DB.signal id
   | VBD_set_active (id, b) ->
       debug "VBD.set_active %s %b" (VBD_DB.string_of_id id) b ;
@@ -3321,7 +3323,9 @@ module VBD = struct
 
   let add _ dbg x = Debug.with_thread_associated dbg (fun () -> DB.add' x) ()
 
-  let plug _ dbg id = queue_operation dbg (DB.vm_of id) (VBD_hotplug id)
+  let qwer _ dbg id = queue_operation dbg (DB.vm_of id) (VBD_hotplug id)
+
+  (* TODO probs add here *)
 
   let unplug _ dbg id force =
     queue_operation dbg (DB.vm_of id) (VBD_hotunplug (id, force))
@@ -4157,7 +4161,8 @@ let _ =
   Server.VBD.remove (VBD.remove ()) ;
   Server.VBD.stat (VBD.stat ()) ;
   Server.VBD.list (VBD.list ()) ;
-  Server.VBD.plug (VBD.plug ()) ;
+  Server.VBD.qwer (VBD.qwer ()) ;
+  (* TODO probs add here *)
   Server.VBD.unplug (VBD.unplug ()) ;
   Server.VBD.eject (VBD.eject ()) ;
   Server.VBD.insert (VBD.insert ()) ;

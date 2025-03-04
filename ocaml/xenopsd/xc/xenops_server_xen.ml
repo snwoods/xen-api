@@ -3667,7 +3667,7 @@ module VBD = struct
   let vdi_path_of_device ~xs device =
     Device_common.backend_path_of_device ~xs device ^ "/vdi"
 
-  let plug task vm vbd =
+  let qwer task vm vbd =
     (* If the vbd isn't listed as "active" then we don't automatically plug this
        one in *)
     if not (get_active vm vbd) then
@@ -4097,7 +4097,8 @@ module VBD = struct
     on_frontend
       (fun xc xs frontend_domid domain_type ->
         if domain_type <> Vm.Domain_HVM then
-          plug task vm {vbd with backend= Some d}
+          (* TODO replace with attach and activate? *)
+          qwer task vm {vbd with backend= Some d}
         else
           let (device : Device_common.device) =
             device_by_id xc xs vm (device_kind_of ~xs vbd) (id_of vbd)

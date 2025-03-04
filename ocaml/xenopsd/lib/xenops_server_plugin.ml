@@ -207,7 +207,9 @@ module type S = sig
 
     val epoch_end : Xenops_task.task_handle -> Vm.id -> disk -> unit
 
-    val plug : Xenops_task.task_handle -> Vm.id -> Vbd.t -> unit
+    val qwer : Xenops_task.task_handle -> Vm.id -> Vbd.t -> unit
+
+    (* TODO probs add here *)
 
     val unplug : Xenops_task.task_handle -> Vm.id -> Vbd.t -> bool -> unit
 
