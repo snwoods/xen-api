@@ -674,8 +674,20 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
     match (session_id, !Xapi_globs.validate_reusable_pool_session) with
     | session, _ when session = Ref.null ->
         false
-    | _, false ->
+    | _, false -> (
+        let valid_session =
+          try
+            (* Call an API function to check the session is still valid *)
+            let rpc = Helpers.make_rpc ~__context in
+            ignore (Client.Pool.get_all ~rpc ~session_id) ;
+            true
+          with Api_errors.Server_error (err, _) ->
+            debug "%s: Invalid session (globs false): %s" __FUNCTION__ err ;
+            false
+        in
+        debug "Don't need to validate reusable_pool_session but valid=%b" valid_session ;
         true
+    )
     | session_id, true -> (
       try
         (* Call an API function to check the session is still valid *)
@@ -683,7 +695,7 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
         ignore (Client.Pool.get_all ~rpc ~session_id) ;
         true
       with Api_errors.Server_error (err, _) ->
-        debug "%s: Invalid session: %s" __FUNCTION__ err ;
+        debug "%s: Invalid session (globs true): %s" __FUNCTION__ err ;
         false
     )
   in
