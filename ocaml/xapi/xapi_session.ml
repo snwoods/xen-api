@@ -693,22 +693,27 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
         ~host ~pool ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
         ~rbac_permissions ~db_ref ~client_certificate
     in
+    debug "Created session %s" (trackid new_session_id) ;
     new_session_id
   in
   let rec get_session () =
     let session = Atomic.get reusable_pool_session in
+    debug "Checking validity for reusable_pool_session=%s" (trackid session) ;
     if is_valid_session session then (
       (* Check if the session changed during validation.
          Use our version regardless to avoid being stuck in a loop of session creation *)
       if Atomic.get reusable_pool_session <> session then
         debug "reusable_pool_session has changed, using the original anyway" ;
+      debug "Session valid, got reusable_pool_session=%s" (trackid session) ;
       session
     ) else
       let new_session = create_session () in
-      if Atomic.compare_and_set reusable_pool_session session new_session then
+      if Atomic.compare_and_set reusable_pool_session session new_session then (
+        debug "Created reusable_pool_session=%s, old_session=%s" (trackid new_session) (trackid session) ;
         new_session
-      else (
+      ) else (
         (* someone else raced with us and created a session, destroy ours and attempt to use theirs *)
+        debug "Someone raced us, destroying new reusable_pool_session=%s" (trackid new_session) ;
         destroy_db_session ~__context ~self:new_session ;
         (get_session [@tailcall]) ()
       )
@@ -719,18 +724,23 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
     && !Xapi_globs.reuse_pool_sessions
   then
     get_session ()
-  else
+  else (
+    debug "Not reusing session: originator=%s, pool=%b, superuser=%b, uname=%s, reuse=%b" originator pool is_local_superuser (Option.value ~default:"none" uname) !Xapi_globs.reuse_pool_sessions ;
     create_session ()
+  )
 
 (* XXX: only used internally by the code which grants the guest access to the API.
    Needs to be protected by a proper access control system *)
 let login_no_password ~__context ~uname ~host ~pool ~is_local_superuser ~subject
     ~auth_user_sid ~auth_user_name ~rbac_permissions =
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
-  login_no_password_common ~__context ~uname
+  let session = login_no_password_common ~__context ~uname
     ~originator:xapi_internal_originator ~host ~pool ~is_local_superuser
     ~subject ~auth_user_sid ~auth_user_name ~rbac_permissions ~db_ref:None
     ~client_certificate:false
+  in
+  debug "login_no_password got session: %s" (trackid session) ;
+  session
 
 (** Cause the master to update the session last_active every 30s or so *)
 let consider_touching_session rpc session_id =
