@@ -222,7 +222,7 @@ module VDI = struct
     in
     Xapi_stdext_pervasives.Pervasiveext.finally
       (fun () ->
-        Client.Client.VBD.plug ~rpc ~session_id ~self:vbd ;
+        Client.Client.VBD.qwer ~rpc ~session_id ~self:vbd ;
         Xapi_stdext_pervasives.Pervasiveext.finally
           (fun () ->
             f ("/dev/" ^ Client.Client.VBD.get_device ~rpc ~session_id ~self:vbd)

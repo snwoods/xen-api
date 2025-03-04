@@ -3967,7 +3967,7 @@ let vbd_plug ~__context ~self =
       Events_from_xenopsd.with_suppressed queue_name dbg vm_id (fun () ->
           info "xenops: VBD.add %s.%s" (fst vbd.Vbd.id) (snd vbd.Vbd.id) ;
           let id = Client.VBD.add dbg vbd in
-          info "xenops: VBD.plug %s.%s" (fst vbd.Vbd.id) (snd vbd.Vbd.id) ;
+          info "xenops: VBD.qwer %s.%s" (fst vbd.Vbd.id) (snd vbd.Vbd.id) ;
           Client.VBD.qwer dbg id |> sync_with_task __context queue_name
       ) ;
       if not (Db.VBD.get_currently_attached ~__context ~self) then

@@ -5224,7 +5224,7 @@ functor
           (vdi_uuid ~__context into_vdi) ;
         let local_fn = Local.VDI.copy ~vdi ~sr ~base_vdi ~into_vdi in
         let src_sr = Db.VDI.get_SR ~__context ~self:vdi in
-        (* No need to lock the VDI because the VBD.plug will do that for us *)
+        (* No need to lock the VDI because the VBD.qwer will do that for us *)
         (* Try forward the request to a host which can have access to both source
            and destination SR. *)
         let remote_fn ~rpc ~session_id =
@@ -5527,8 +5527,8 @@ functor
 
       let qwer ~__context ~self =
         info "VBD.qwer: VBD = '%s'" (vbd_uuid ~__context self) ;
-        let local_fn = Local.VBD.plug ~self in
-        let remote_fn = Client.VBD.plug ~self in
+        let local_fn = Local.VBD.qwer ~self in
+        let remote_fn = Client.VBD.qwer ~self in
         with_vbd_marked ~__context ~vbd:self ~doc:"VBD.qwer" ~op:`plug
           (fun () -> forward_vbd_op ~local_fn ~__context ~self ~remote_fn
         ) ;

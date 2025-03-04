@@ -772,7 +772,7 @@ module VbdDeviceTests = DeviceTests (struct
 
   let remove = Client.VBD.remove dbg
 
-  let qwer = Client.VBD.plug dbg
+  let qwer = Client.VBD.qwer dbg
 
   (* TODO probs add here *)
 

@@ -2016,7 +2016,7 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       let extra_args = B.VM.get_hook_args id in
       Xenops_hooks.vm ~script ~reason ~id ~extra_args
   | VBD_plug id ->
-      debug "VBD.plug try changing name %s" (VBD_DB.string_of_id id) ;
+      debug "VBD.qwer try changing name %s" (VBD_DB.string_of_id id) ;
       B.VBD.qwer t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
       (*debug "VBD.attach then VBD.activate %s" (VBD_DB.string_of_id id) ;
       let vdi = B.VBD.attach t (VBD_DB.vm_of id) (VBD_DB.read_exn id) in

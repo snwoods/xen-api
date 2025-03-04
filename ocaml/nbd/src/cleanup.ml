@@ -137,7 +137,7 @@ module VBD = struct
               (fun () ->
                 Lwt_log.notice_f "Plugging VBD %s" (API.Ref.string_of vbd)
                 >>= fun () ->
-                Xen_api.VBD.plug ~rpc ~session_id ~self:vbd >>= fun () ->
+                Xen_api.VBD.qwer ~rpc ~session_id ~self:vbd >>= fun () ->
                 Lwt.finalize
                   (fun () -> f vbd)
                   (fun () ->

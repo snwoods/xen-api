@@ -102,7 +102,7 @@ let enable_database_replication ~__context ~get_vdi_callback =
                   ~qos_algorithm_params:[] ~other_config:[] ~device:""
                   ~currently_attached:false
               in
-              Client.VBD.plug ~rpc ~session_id ~self:vbd ;
+              Client.VBD.qwer ~rpc ~session_id ~self:vbd ;
               vbd
           )
         in

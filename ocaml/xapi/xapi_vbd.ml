@@ -42,7 +42,7 @@ let qwer ~__context ~self =
     System_domains.storage_driver_domain_of_vbd ~__context ~vbd:self = vm
     && not force_loopback_vbd
   then (
-    debug "VBD.plug of loopback VBD '%s'" (Ref.string_of self) ;
+    debug "VBD.qwer of loopback VBD '%s'" (Ref.string_of self) ;
     Storage_access.attach_and_activate ~__context ~vbd:self ~domid
       (fun attach_info ->
         let _xendisks, blockdevs, files, nbds =
@@ -53,7 +53,7 @@ let qwer ~__context ~self =
           | {path} :: _, _, _ | _, {path} :: _, _ ->
               path
           | _, _, nbd :: _ ->
-              debug "Using nbd-client for VBD.plug of VBD '%s'"
+              debug "Using nbd-client for VBD.qwer of VBD '%s'"
                 (Ref.string_of self) ;
               let unix_socket_path, export_name =
                 Storage_interface.parse_nbd_uri nbd

@@ -246,7 +246,7 @@ let create_vbd_and_plug_with_other_config rpc session_id vm vdi device_name
       ~qos_algorithm_type:qtype ~qos_algorithm_params:qparams ~other_config
       ~device:"" ~currently_attached:false
   in
-  try Client.VBD.plug ~rpc ~session_id ~self:vbd
+  try Client.VBD.qwer ~rpc ~session_id ~self:vbd
   with Api_errors.Server_error (_, _) as e ->
     debug "VBD created but not hotplugged: %s" (Api_errors.to_string e)
 
@@ -2431,7 +2431,7 @@ let vbd_plug _printer rpc session_id params =
   let vbd =
     Client.VBD.get_by_uuid ~rpc ~session_id ~uuid:(List.assoc "uuid" params)
   in
-  Client.VBD.plug ~rpc ~session_id ~self:vbd
+  Client.VBD.qwer ~rpc ~session_id ~self:vbd
 
 let vbd_unplug _printer rpc session_id params =
   let vbd =

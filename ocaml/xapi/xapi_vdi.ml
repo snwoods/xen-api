@@ -1095,7 +1095,7 @@ let clone ~__context ~vdi ~driver_params =
             ~self:a.Db_actions.vDI_SR ;
           (* Remove the clone from the VDI's current operations since the dom0 block-attach
              will protect the VDI anyway. There's no point refreshing the VDI's allowed operations
-             because they're going to change when the VBD.plug happens. *)
+             because they're going to change when the VBD.qwer happens. *)
           Db.VDI.remove_from_current_operations ~__context ~self:vdi
             ~key:task_id ;
           Sm_fs_ops.copy_vdi ~__context vdi newvdi ;

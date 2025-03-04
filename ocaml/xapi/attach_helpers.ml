@@ -109,7 +109,7 @@ let with_vbds rpc session_id __context vm vdis mode f =
           debug "created VBD (uuid %s); attempting to hotplug to VM (uuid: %s)"
             vbd_uuid uuid ;
           vbds := vbd :: !vbds ;
-          Client.VBD.plug ~rpc ~session_id ~self:vbd
+          Client.VBD.qwer ~rpc ~session_id ~self:vbd
         )
         vdis ;
       vbds := List.rev !vbds ;

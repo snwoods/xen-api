@@ -6540,7 +6540,7 @@ module VBD = struct
       ~errs:[Api_errors.vbd_not_removable_media; Api_errors.vbd_not_empty]
       ~allowed_roles:_R_VM_OP ()
 
-  (* I think this is for Local.VBD.plug? *)
+  (* I think this is for Local.VBD.qwer? *)
   let qwer =
     call ~name:"plug"
       ~lifecycle:

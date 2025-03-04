@@ -246,7 +246,7 @@ let vdi_snapshot_in_pool rpc session_id sr_info () =
         let dom0 = Qt.VM.dom0_of_host rpc session_id host in
         let vbd = vbd_create_helper ~rpc ~session_id ~vM:dom0 ~vDI:vdi () in
         print_endline (Printf.sprintf "Plugging in to host %s" name) ;
-        Client.Client.VBD.plug ~rpc ~session_id ~self:vbd ;
+        Client.Client.VBD.qwer ~rpc ~session_id ~self:vbd ;
         Xapi_stdext_pervasives.Pervasiveext.finally do_test (fun () ->
             print_endline (Printf.sprintf "Unplugging from host %s" name) ;
             Client.Client.VBD.unplug ~rpc ~session_id ~self:vbd ;
@@ -293,7 +293,7 @@ let vdi_create_destroy_plug_checksize rpc session_id sr_info () =
     in
     let dom0 = Qt.VM.dom0_of_host rpc session_id host in
     let vbd = vbd_create_helper ~rpc ~session_id ~vM:dom0 ~vDI:vdi () in
-    Client.Client.VBD.plug ~rpc ~session_id ~self:vbd ;
+    Client.Client.VBD.qwer ~rpc ~session_id ~self:vbd ;
     Xapi_stdext_pervasives.Pervasiveext.finally
       (fun () ->
         try

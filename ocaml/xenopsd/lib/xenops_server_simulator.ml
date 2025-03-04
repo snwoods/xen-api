@@ -256,7 +256,7 @@ let add_vbd (vm : Vm.id) (vbd : Vbd.t) () =
   in
   let this_dn = Option.value ~default:next_dn vbd.Vbd.position in
   if List.mem this_dn dns then (
-    debug "VBD.plug %s.%s: Already exists" (fst vbd.Vbd.id) (snd vbd.Vbd.id) ;
+    debug "VBD.qwer %s.%s: Already exists" (fst vbd.Vbd.id) (snd vbd.Vbd.id) ;
     raise
       (Xenopsd_error
          (Already_exists ("vbd", Device_number.to_debug_string this_dn))

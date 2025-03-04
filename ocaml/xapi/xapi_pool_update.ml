@@ -287,7 +287,7 @@ let attach_helper ~__context ~uuid ~vdi ~use_localhost_proxy =
                 ~qos_algorithm_params:[] ~other_config:[] ~device:""
                 ~currently_attached:false
             in
-            Client.VBD.plug ~rpc ~session_id ~self:vbd ;
+            Client.VBD.qwer ~rpc ~session_id ~self:vbd ;
             "/dev/" ^ Client.VBD.get_device ~rpc ~session_id ~self:vbd
         )
       in
