@@ -3565,7 +3565,7 @@ module VBD = struct
     | Some (VDI path) ->
       None, path
 
-  let attach task xc xs frontend_domid vbd vdi =
+  let _attach task xc xs frontend_domid vbd vdi =
     let vdi =
       match attached_vdi_from_vdi xs vdi with
       | Some attached_vdi, _ -> attached_vdi
@@ -3580,9 +3580,9 @@ module VBD = struct
       (vdi |> rpc_of attached_vdi |> Jsonrpc.to_string) ;
     vdi
 
-  let activate task xc xs frontend_domid vbd vdi =
+  let _activate task xc xs frontend_domid vbd vdi =
     match attached_vdi_from_vdi xs vdi with
-    | Some attached_vdi, _ -> ()
+    | Some _, _ -> ()
     | None, path ->
       let sr, vdi = Storage.get_disk_by_name task path in
       let dp = Storage.id_of (string_of_int frontend_domid) vbd.id in
@@ -3683,9 +3683,9 @@ module VBD = struct
               vm
           else
             let vdi =
-              attach task xc xs frontend_domid vbd vbd.backend
+              _attach task xc xs frontend_domid vbd vbd.backend
             in
-            activate task xc xs frontend_domid vbd vbd.backend ;
+            _activate task xc xs frontend_domid vbd vbd.backend ;
             let params, xenstore_data, extra_keys =
               params_of_backend vdi.attach_info
             in
@@ -3816,6 +3816,167 @@ module VBD = struct
         )
         vm
 
+  let attach task vm vbd =
+    (* If the vbd isn't listed as "active" then we don't automatically plug this
+        one in *)
+    if not (get_active vm vbd) then (
+      debug "VBD %s.%s is not active: not plugging into VM" (fst vbd.Vbd.id)
+        (snd vbd.Vbd.id) ;
+      None
+    ) else
+      on_frontend
+        (fun xc xs frontend_domid domain_type ->
+          if vbd.backend = None && domain_type <> Vm.Domain_HVM then (
+            info
+              "VM = %s; an empty CDROM drive on PV and PVinPVH guests is \
+                simulated by unplugging the whole drive"
+              vm ;
+            None
+          ) else
+              Some (_attach task xc xs frontend_domid vbd vbd.backend)
+        )
+        vm
+
+  let activate task vm vbd vdi =
+    (* If the vbd isn't listed as "active" then we don't automatically plug this
+        one in *)
+    match vdi with
+    | None ->
+      debug "Not attached, so not activating"
+    | Some vdi ->
+      on_frontend
+        (fun xc xs frontend_domid domain_type ->
+          _activate task xc xs frontend_domid vbd vbd.backend ;
+          let params, xenstore_data, extra_keys =
+            params_of_backend vdi.attach_info
+          in
+          let new_keys =
+            List.map (fun (k, v) -> ("sm-data/" ^ k, v)) xenstore_data
+            @ extra_keys
+          in
+          let extra_backend_keys =
+            List.fold_left
+              (fun acc (k, v) -> (k, v) :: List.remove_assoc k acc)
+              vbd.extra_backend_keys new_keys
+          in
+          let kind = device_kind_of ~xs vbd in
+          (* Remember the VBD id with the device *)
+          let vbd_id = (_device_id kind, id_of vbd) in
+          (* Remember the VDI with the device (for later deactivation) *)
+          let vdi_id =
+            (_vdi_id, vbd.backend |> rpc_of backend |> Jsonrpc.to_string)
+          in
+          let dp_id =
+            (_dp_id, Storage.id_of (string_of_int frontend_domid) vbd.Vbd.id)
+          in
+          let x =
+            {
+              Device.Vbd.mode=
+                ( match vbd.mode with
+                | ReadOnly ->
+                    Device.Vbd.ReadOnly
+                | ReadWrite ->
+                    Device.Vbd.ReadWrite
+                )
+            ; device_number= vbd.position
+            ; phystype= Device.Vbd.Phys
+            ; params
+            ; dev_type=
+                ( match vbd.ty with
+                | CDROM ->
+                    Device.Vbd.CDROM
+                | Disk ->
+                    Device.Vbd.Disk
+                | Floppy ->
+                    Device.Vbd.Floppy
+                )
+            ; unpluggable= vbd.unpluggable
+            ; protocol= None
+            ; kind
+            ; extra_backend_keys
+            ; extra_private_keys=
+                dp_id :: vdi_id :: vbd_id :: vbd.extra_private_keys
+            ; backend_domid= vdi.domid
+            }
+          in
+          let dev =
+            Xenops_task.with_subtask task
+              (Printf.sprintf "Vbd.add %s" (id_of vbd))
+              (fun () ->
+                Device.Vbd.add task ~xc ~xs
+                  ~hvm:(domain_type = Vm.Domain_HVM)
+                  x frontend_domid
+              )
+          in
+          (* We store away the disk so we can implement VBD.stat *)
+          Option.iter
+            (fun d ->
+              xs.Xs.write
+                (vdi_path_of_device ~xs dev)
+                (d |> rpc_of disk |> Jsonrpc.to_string)
+            )
+            vbd.backend ;
+          (* NB now the frontend position has been resolved *)
+          let open Device_common in
+          let device_number =
+            dev.frontend.devid |> Device_number.of_xenstore_key
+          in
+          let qemu_domid = this_domid ~xs in
+          let qemu_frontend =
+            let maybe_create_vbd_frontend () =
+              let index = Device_number.disk device_number in
+              match vbd.Vbd.backend with
+              | None ->
+                  Some (index, Empty)
+              | Some _ ->
+                  Some (index, create_vbd_frontend ~xc ~xs task qemu_domid vdi)
+            in
+            match (device_number :> Device_number.bus_type * int * int) with
+            | Ide, n, _ when 0 <= n && n < 4 ->
+                maybe_create_vbd_frontend ()
+            | Floppy, n, _ when 0 <= n && n < 2 ->
+                maybe_create_vbd_frontend ()
+            | Ide, n, _ ->
+                D.warn
+                  "qemu_frontend: Ide supports device numbers between 0 and \
+                    3, but got: %i"
+                  n ;
+                None
+            | Floppy, n, _ ->
+                D.warn
+                  "qemu_frontend: Floppy supports device numbers between 0 \
+                    and 1, but got: %i"
+                  n ;
+                None
+            | (Xen | Scsi), _, _ ->
+                None
+          in
+          (* Remember what we've just done *)
+          (* Dom0 doesn't have a vm_t - we don't need this currently, but when
+              we have storage driver domains, we will. Also this causes the
+              SMRT tests to fail, as they demand the loopback VBDs *)
+          Option.iter
+            (fun q ->
+              let _ =
+                DB.update_exn vm (fun vm_t ->
+                    Some
+                      VmExtra.
+                        {
+                          persistent=
+                            {
+                              vm_t.VmExtra.persistent with
+                              qemu_vbds=
+                                (vbd.Vbd.id, q) :: vm_t.persistent.qemu_vbds
+                            }
+                        }
+                )
+              in
+              ()
+            )
+            qemu_frontend
+        )
+        vm
+
   let unplug task vm vbd force =
     with_xc_and_xs (fun xc xs ->
         try
@@ -3942,9 +4103,9 @@ module VBD = struct
             device_by_id xc xs vm (device_kind_of ~xs vbd) (id_of vbd)
           in
           let vdi =
-            attach task xc xs frontend_domid vbd (Some d)
+            _attach task xc xs frontend_domid vbd (Some d)
           in
-          activate task xc xs frontend_domid vbd (Some d) ;
+          _activate task xc xs frontend_domid vbd (Some d) ;
           let params, xenstore_data, _ = params_of_backend vdi.attach_info in
           let phystype = Device.Vbd.Phys in
           (* We store away the disk so we can implement VBD.stat *)

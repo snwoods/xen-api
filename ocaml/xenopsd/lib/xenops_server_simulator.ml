@@ -666,6 +666,8 @@ module VUSB = struct
   let get_device_action_request _vm _vusb = None
 end
 
+type attached_vdi = unit
+
 module VBD = struct
   let set_active _ (_vm : Vm.id) (_vbd : Vbd.t) (_b : bool) = ()
 
@@ -674,6 +676,10 @@ module VBD = struct
   let epoch_end _ (_vm : Vm.id) (_disk : disk) = ()
 
   let plug _ (vm : Vm.id) (vbd : Vbd.t) = with_lock m (add_vbd vm vbd)
+
+  let attach _ (vm : Vm.id) (vbd : Vbd.t) = with_lock m (add_vbd vm vbd); Some ()
+
+  let activate _ (_vm : Vm.id) (_vbd : Vbd.t) _ = ()
 
   let unplug _ vm vbd _ = with_lock m (remove_vbd vm vbd)
 

@@ -138,6 +138,8 @@ module PCI = struct
   let get_device_action_request _ _ = None
 end
 
+type attached_vdi
+
 module VBD = struct
   let set_active _ _ _ _ = ()
 
@@ -146,6 +148,10 @@ module VBD = struct
   let epoch_end _ _ _ = ()
 
   let plug _ _ _ = unimplemented "VBD.plug"
+
+  let attach _ _ _ = unimplemented "VBD.attach"
+
+  let activate _ _ _ = unimplemented "VBD.activate"
 
   let unplug _ _ _ _ = unimplemented "VBD.unplug"
 

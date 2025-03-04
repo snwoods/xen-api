@@ -52,6 +52,8 @@ let string_of_flag = function Live -> "Live"
 type progress_cb = float -> unit
 
 module type S = sig
+  type attached_vdi
+
   val init : unit -> unit
 
   module HOST : sig
@@ -208,6 +210,10 @@ module type S = sig
     val epoch_end : Xenops_task.task_handle -> Vm.id -> disk -> unit
 
     val plug : Xenops_task.task_handle -> Vm.id -> Vbd.t -> unit
+
+    val attach : Xenops_task.task_handle -> Vm.id -> Vbd.t -> attached_vdi option
+
+    val activate : Xenops_task.task_handle -> Vm.id -> Vbd.t -> attached_vdi option -> unit
 
     val unplug : Xenops_task.task_handle -> Vm.id -> Vbd.t -> bool -> unit
 
