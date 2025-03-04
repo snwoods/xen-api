@@ -3565,7 +3565,7 @@ module VBD = struct
     | Some (VDI path) ->
       None, path
 
-  let attach task xc xs frontend_domid vbd vdi =
+  let _attach task xc xs frontend_domid vbd vdi =
     let vdi =
       match attached_vdi_from_vdi xs vdi with
       | Some attached_vdi, _ -> attached_vdi
@@ -3580,7 +3580,7 @@ module VBD = struct
       (vdi |> rpc_of attached_vdi |> Jsonrpc.to_string) ;
     vdi
 
-  let activate task xc xs frontend_domid vbd vdi =
+  let _activate task xc xs frontend_domid vbd vdi =
     match attached_vdi_from_vdi xs vdi with
     | Some attached_vdi, _ -> ()
     | None, path ->
@@ -3683,9 +3683,9 @@ module VBD = struct
               vm
           else
             let vdi =
-              attach task xc xs frontend_domid vbd vbd.backend
+              _attach task xc xs frontend_domid vbd vbd.backend
             in
-            activate task xc xs frontend_domid vbd vbd.backend ;
+            _activate task xc xs frontend_domid vbd vbd.backend ;
             let params, xenstore_data, extra_keys =
               params_of_backend vdi.attach_info
             in
@@ -3816,7 +3816,7 @@ module VBD = struct
         )
         vm
 
-  let attach task vm vbd vdi =
+  let attach task vm vbd =
     (* If the vbd isn't listed as "active" then we don't automatically plug this
         one in *)
     if not (get_active vm vbd) then (
@@ -3833,7 +3833,7 @@ module VBD = struct
               vm ;
             None
           ) else
-              Some (attach task xc xs frontend_domid vbd vbd.backend)
+              Some (_attach task xc xs frontend_domid vbd vbd.backend)
         )
         vm
 
@@ -3846,7 +3846,7 @@ module VBD = struct
     | Some vdi ->
       on_frontend
         (fun xc xs frontend_domid domain_type ->
-          activate task xc xs frontend_domid vbd vbd.backend ;
+          _activate task xc xs frontend_domid vbd vbd.backend ;
           let params, xenstore_data, extra_keys =
             params_of_backend vdi.attach_info
           in
@@ -4103,9 +4103,9 @@ module VBD = struct
             device_by_id xc xs vm (device_kind_of ~xs vbd) (id_of vbd)
           in
           let vdi =
-            attach task xc xs frontend_domid vbd (Some d)
+            _attach task xc xs frontend_domid vbd (Some d)
           in
-          activate task xc xs frontend_domid vbd (Some d) ;
+          _activate task xc xs frontend_domid vbd (Some d) ;
           let params, xenstore_data, _ = params_of_backend vdi.attach_info in
           let phystype = Device.Vbd.Phys in
           (* We store away the disk so we can implement VBD.stat *)
