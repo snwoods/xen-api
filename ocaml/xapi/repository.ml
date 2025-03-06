@@ -312,6 +312,7 @@ let sync ~__context ~self ~token ~token_id ~username ~password =
       raise Api_errors.(Server_error (reposync_failed, []))
 
 let http_get_host_updates_in_json ~__context ~host ~installed =
+  debug "http_get_host_updates_in_json: should reuse session" ;
   let host_session_id =
     Xapi_session.login_no_password ~__context ~uname:None ~host ~pool:true
       ~is_local_superuser:true ~subject:Ref.null ~auth_user_sid:""

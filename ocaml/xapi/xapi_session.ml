@@ -670,6 +670,7 @@ let login_no_password_common ~__context ~uname ~originator ~host ~pool
     ~is_local_superuser ~subject ~auth_user_sid ~auth_user_name
     ~rbac_permissions ~db_ref ~client_certificate =
   Context.with_tracing ~originator ~__context __FUNCTION__ @@ fun __context ->
+  debug "login_no_password_common" ;
   let is_valid_session session_id =
     match (session_id, !Xapi_globs.validate_reusable_pool_session) with
     | session, _ when session = Ref.null ->
@@ -756,6 +757,7 @@ let consider_touching_session rpc session_id =
 
 (* Make sure the pool secret matches *)
 let slave_login_common ~__context ~host_str ~psecret =
+  debug "slave_login_common" ;
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
   Constants.when_tgroups_enabled (fun () ->
       Tgroup.of_creator (Tgroup.Group.Creator.make ~intrapool:true ())
@@ -772,6 +774,7 @@ let slave_login_common ~__context ~host_str ~psecret =
 let slave_login ~__context ~host ~psecret =
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
   slave_login_common ~__context ~host_str:(Ref.string_of host) ~psecret ;
+  debug "slave_login: should reuse session" ;
   login_no_password ~__context ~uname:None ~host ~pool:true
     ~is_local_superuser:true ~subject:Ref.null ~auth_user_sid:""
     ~auth_user_name:(Ref.string_of host) ~rbac_permissions:[]
@@ -780,12 +783,14 @@ let slave_login ~__context ~host ~psecret =
 let slave_local_login ~__context ~psecret =
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
   slave_login_common ~__context ~host_str:"localhost" ~psecret ;
+  debug "slave_local_login: cannot reuse session" ;
   debug "Add session to local storage" ;
   Xapi_local_session.create ~__context ~pool:true
 
 (* Emergency mode login, uses local storage *)
 let slave_local_login_with_password ~__context ~uname ~pwd =
   Context.with_tracing ~__context __FUNCTION__ @@ fun __context ->
+  debug "slave_local_login_with_password: cannot reuse session" ;
   if Context.preauth ~__context <> Some `root then (
     try
       (* CP696 - only tries to authenticate against LOCAL superuser account *)
@@ -961,6 +966,7 @@ let login_with_password ~__context ~uname ~pwd ~version:_ ~originator =
             Tgroup.Group.(Creator.make ~identity:Identity.root_identity ())
       ) ;
 
+      debug "login_with_password (root): cannot reuse session" ;
       login_no_password_common ~__context ~uname:(Some uname) ~originator
         ~host:(Helpers.get_localhost ~__context)
         ~pool:false ~is_local_superuser:true ~subject:Ref.null ~auth_user_sid:""
@@ -984,6 +990,7 @@ let login_with_password ~__context ~uname ~pwd ~version:_ ~originator =
       let rbac_permissions =
         Xapi_role.get_permissions_name_label ~__context ~self:role
       in
+      debug "login_with_password (client_cert): cannot reuse session" ;
       login_no_password_common ~__context ~uname:(Some uname) ~originator
         ~host:(Helpers.get_localhost ~__context)
         ~pool:false ~is_local_superuser:false ~subject:Ref.null
@@ -1011,6 +1018,7 @@ let login_with_password ~__context ~uname ~pwd ~version:_ ~originator =
                 Tgroup.Group.(Creator.make ~identity:Identity.root_identity ())
           ) ;
 
+          debug "login_with_password (no preauth): cannot reuse session" ;
           login_no_password_common ~__context ~uname:(Some uname) ~originator
             ~host:(Helpers.get_localhost ~__context)
             ~pool:false ~is_local_superuser:true ~subject:Ref.null
@@ -1316,6 +1324,7 @@ let login_with_password ~__context ~uname ~pwd ~version:_ ~originator =
                     )
               ) ;
 
+              debug "login_with_password (query_external_auth): cannot reuse session" ;
               login_no_password_common ~__context ~uname:(Some uname)
                 ~originator
                 ~host:(Helpers.get_localhost ~__context)
@@ -1570,6 +1579,7 @@ let create_readonly_session ~__context ~uname ~db_ref =
     Xapi_role.get_permissions_name_label ~__context ~self:role
   in
   let master = Helpers.get_master ~__context in
+  debug "create_readonly_session: cannot reuse session" ;
   login_no_password_common ~__context ~uname:(Some uname)
     ~originator:xapi_internal_originator ~host:master ~pool:false
     ~is_local_superuser:false ~subject:Ref.null ~auth_user_sid:"readonly-sid"

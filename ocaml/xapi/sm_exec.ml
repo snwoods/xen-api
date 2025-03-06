@@ -324,6 +324,7 @@ let with_session sr f =
   Server_helpers.exec_with_new_task "sm_exec" (fun __context ->
       let create_session () =
         let host = !Xapi_globs.localhost_ref in
+        debug "sm_exec with_session: cannot reuse session" ;
         let session =
           Xapi_session.login_no_password ~__context ~uname:None ~host
             ~pool:false ~is_local_superuser:true ~subject:Ref.null
