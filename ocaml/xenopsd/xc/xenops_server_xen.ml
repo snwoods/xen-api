@@ -440,6 +440,8 @@ module Storage = struct
 
   let dp_destroy = dp_destroy
 
+  let detach = detach
+
   let get_disk_by_name = get_disk_by_name
 end
 
@@ -3593,6 +3595,8 @@ module VBD = struct
       let vm = fst vbd.id in
       Storage.activate ~xc ~xs task vm dp sr vdi
 
+  (* TODO could split out a _deactivate function here *)
+
   let frontend_domid_of_device device =
     device.Device_common.frontend.Device_common.domid
 
@@ -4105,6 +4109,172 @@ module VBD = struct
               match (domid, backend) with
               | Some x, None | Some x, Some (VDI _) ->
                   Storage.dp_destroy task
+                    (Storage.id_of (string_of_int x) vbd.Vbd.id)
+              | _ ->
+                  ()
+            )
+        with Device_common.Device_error (_, s) ->
+          debug "Caught Device_error: %s" s ;
+          raise (Xenopsd_error (Device_detach_rejected ("VBD", id_of vbd, s)))
+    )
+
+  let deactivate task vm vbd =
+    with_tracing ~task ~name:"VBD_deactivate" @@ fun () ->
+    with_xc_and_xs (fun xc xs ->
+      let domid = domid_of_uuid ~xs (uuid_of_string vm) in
+      let dev =
+        try
+          Some (device_by_id xc xs vm (device_kind_of ~xs vbd) (id_of vbd))
+        with
+        | Xenopsd_error (Does_not_exist (_, _)) ->
+            debug "VM = %s; VBD = %s; Ignoring missing domain" vm (id_of vbd) ;
+            None
+        | Xenopsd_error Device_not_connected ->
+            debug "VM = %s; VBD = %s; Ignoring missing device" vm (id_of vbd) ;
+            None
+      in
+      let backend =
+        match dev with
+        | None ->
+            None
+        | Some dv -> (
+          match
+            Rpcmarshal.unmarshal typ_of_backend
+              (Device.Generic.get_private_key ~xs dv _vdi_id
+              |> Jsonrpc.of_string
+              )
+          with
+          | Ok x ->
+              x
+          | Error (`Msg m) ->
+              internal_error "Failed to unmarshal VBD backend: %s" m
+        )
+      in
+      let vmid = Storage.vm_of_domid domid in
+      with_tracing ~task ~name:"VBD_deactivate_deactivate" @@ fun () ->
+      match (domid, backend) with
+      | Some x, Some (VDI path) ->
+          let sr, vdi = Storage.get_disk_by_name task path in
+          let dp = Storage.id_of (string_of_int x) vbd.id in
+          Storage.deactivate task dp sr vdi vmid
+      (* TODO Do we only need to deactivate VDIs, not Local or CD? *)
+      | _ ->
+          ()
+    )
+
+  let detach task vm vbd force =
+    with_tracing ~task ~name:"VBD_detach" @@ fun () ->
+    with_xc_and_xs (fun xc xs ->
+        try
+          (* On destroying the datapath
+
+              1. if the device has already been shutdown and deactivated (as in
+              suspend) we must call DP.destroy here to avoid leaks
+
+              2. if the device is successfully shutdown here then we must call
+              DP.destroy because no-one else will
+
+              3. if the device shutdown is rejected then we should leave the DP
+              alone and rely on the event thread calling us again later. *)
+          let domid = domid_of_uuid ~xs (uuid_of_string vm) in
+          (* If the device is gone then we don't need to shut it down but we do
+              need to free any storage resources. *)
+          let dev =
+            try
+              Some (device_by_id xc xs vm (device_kind_of ~xs vbd) (id_of vbd))
+            with
+            | Xenopsd_error (Does_not_exist (_, _)) ->
+                debug "VM = %s; VBD = %s; Ignoring missing domain" vm (id_of vbd) ;
+                None
+            | Xenopsd_error Device_not_connected ->
+                debug "VM = %s; VBD = %s; Ignoring missing device" vm (id_of vbd) ;
+                None
+          in
+          let backend =
+            match dev with
+            | None ->
+                None
+            | Some dv -> (
+              match
+                Rpcmarshal.unmarshal typ_of_backend
+                  (Device.Generic.get_private_key ~xs dv _vdi_id
+                  |> Jsonrpc.of_string
+                  )
+              with
+              | Ok x ->
+                  x
+              | Error (`Msg m) ->
+                  internal_error "Failed to unmarshal VBD backend: %s" m
+            )
+          in
+          Option.iter
+            (fun dev ->
+              if force && not (Device.can_surprise_remove ~xs dev) then
+                debug
+                  "VM = %s; VBD = %s; Device is not surprise-removable \
+                    (ignoring and removing anyway)"
+                  vm (id_of vbd) ;
+              (* this happens on normal shutdown too *)
+              (* Case (1): success; Case (2): success; Case (3): an exception is
+                  thrown *)
+              with_tracing ~task ~name:"VBD_detach_clean_shutdown" @@ fun () ->
+              Xenops_task.with_subtask task
+                (Printf.sprintf "Vbd.clean_shutdown %s" (id_of vbd))
+                (fun () ->
+                  (if force then Device.hard_shutdown else Device.clean_shutdown)
+                    task ~xs dev
+                )
+            )
+            dev ;
+          (* We now have a shutdown device but an active DP: we should destroy
+              the DP if the backend is of type VDI *)
+          finally
+            (fun () ->
+              (with_tracing ~task ~name:"VBD_detach_release" @@ fun () -> (
+                Option.iter
+                  (fun dev ->
+                    Xenops_task.with_subtask task
+                      (Printf.sprintf "Vbd.release %s" (id_of vbd))
+                      (fun () -> Device.Vbd.release task ~xc ~xs dev)
+                  )
+                  dev ;
+              )) ;
+              (* If we have a qemu frontend, detach this too. *)
+              with_tracing ~task ~name:"VBD_detach_detach_qemu" @@ fun () ->
+              let _ =
+                DB.update vm
+                  (Option.map (fun vm_t ->
+                        let persistent = vm_t.VmExtra.persistent in
+                        if List.mem_assoc vbd.Vbd.id persistent.VmExtra.qemu_vbds
+                        then (
+                          let _, qemu_vbd =
+                            List.assoc vbd.Vbd.id persistent.VmExtra.qemu_vbds
+                          in
+                          (* destroy_vbd_frontend ignores 'refusing to close'
+                            transients' *)
+                          destroy_vbd_frontend ~xc ~xs task qemu_vbd ;
+                          VmExtra.
+                            {
+                              persistent=
+                                {
+                                  persistent with
+                                  qemu_vbds=
+                                    List.remove_assoc vbd.Vbd.id
+                                      persistent.qemu_vbds
+                                }
+                            }
+                        ) else
+                          vm_t
+                    )
+                  )
+              in
+              ()
+            )
+            (fun () ->
+              with_tracing ~task ~name:"VBD_detach_dp_destroy" @@ fun () ->
+              match (domid, backend) with
+              | Some x, None | Some x, Some (VDI _) ->
+                  Storage.detach task
                     (Storage.id_of (string_of_int x) vbd.Vbd.id)
               | _ ->
                   ()

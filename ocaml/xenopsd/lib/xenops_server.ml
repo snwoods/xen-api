@@ -2035,9 +2035,12 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       B.VBD.set_qos t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
       VBD_DB.signal id
   | VBD_unplug (id, force) ->
-      debug "VBD.unplug %s" (VBD_DB.string_of_id id) ;
+      debug "VBD.deactivate then VBD.detach %s" (VBD_DB.string_of_id id) ;
       finally
-        (fun () -> B.VBD.unplug t (VBD_DB.vm_of id) (VBD_DB.read_exn id) force)
+        (fun () ->
+          B.VBD.deactivate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
+          B.VBD.detach t (VBD_DB.vm_of id) (VBD_DB.read_exn id) force
+        )
         (fun () -> VBD_DB.signal id)
   | VBD_insert (id, disk) -> (
       (* NB this is also used to "refresh" ie signal a qemu that it should
