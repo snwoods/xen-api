@@ -2017,8 +2017,8 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       Xenops_hooks.vm ~script ~reason ~id ~extra_args
   | VBD_plug id ->
       debug "VBD.attach then VBD.activate %s" (VBD_DB.string_of_id id) ;
-      let vdi = B.VBD.attach t (VBD_DB.vm_of id) (VBD_DB.read_exn id) in
-      B.VBD.activate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) vdi ;
+      B.VBD.attach t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
+      B.VBD.activate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
       VBD_DB.signal id
   | VBD_set_active (id, b) ->
       debug "VBD.set_active %s %b" (VBD_DB.string_of_id id) b ;
