@@ -155,9 +155,9 @@ module VBD = struct
 
   let unplug _ _ _ _ = unimplemented "VBD.unplug"
 
-  let deactivate _ _ _ = unimplemented "VBD.deactivate"
+  let deactivate _ _ _ _ = unimplemented "VBD.deactivate"
 
-  let detach _ _ _ _ = unimplemented "VBD.detach"
+  let detach _ _ _ = unimplemented "VBD.detach"
 
   let insert _ _ _ _ = unimplemented "VBD.insert"
 

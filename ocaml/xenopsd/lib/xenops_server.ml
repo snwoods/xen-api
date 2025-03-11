@@ -2038,8 +2038,8 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       debug "VBD.deactivate then VBD.detach %s" (VBD_DB.string_of_id id) ;
       finally
         (fun () ->
-          B.VBD.deactivate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
-          B.VBD.detach t (VBD_DB.vm_of id) (VBD_DB.read_exn id) force
+          B.VBD.deactivate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) force ;
+          B.VBD.detach t (VBD_DB.vm_of id) (VBD_DB.read_exn id)
         )
         (fun () -> VBD_DB.signal id)
   | VBD_insert (id, disk) -> (
