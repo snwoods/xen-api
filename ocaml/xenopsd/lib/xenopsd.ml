@@ -283,6 +283,11 @@ let options =
     , (fun () -> string_of_int !test_open)
     , "TESTING only: open N file descriptors"
     )
+  ; ( "split-plug-unplug-atomics"
+    , Arg.Bool (fun x -> Xenops_server.split_plug_unplug_atomics := x)
+    , (fun () -> string_of_bool !Xenops_server.split_plug_unplug_atomics)
+    , "True if we want to split the plug/unplug atomics into attach/activate and detach/deactivate"
+    )
   ]
 
 let path () = Filename.concat !sockets_path "xenopsd"

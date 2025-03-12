@@ -37,6 +37,8 @@ let finally = Xapi_stdext_pervasives.Pervasiveext.finally
 
 let domain_shutdown_ack_timeout = ref 60.
 
+let split_plug_unplug_atomics = ref false
+
 type context = {
     transferred_fd: Unix.file_descr option
         (** some API calls take a file descriptor argument *)
@@ -122,10 +124,14 @@ type atomic =
   | VM_hook_script_stable of (Vm.id * Xenops_hooks.script * string * Vm.id)
   | VM_hook_script of (Vm.id * Xenops_hooks.script * string)
   | VBD_plug of Vbd.id
+  | VBD_attach of Vbd.id
+  | VBD_activate of Vbd.id
   | VBD_epoch_begin of (Vbd.id * disk * bool)
   | VBD_epoch_end of (Vbd.id * disk)
   | VBD_set_qos of Vbd.id
   | VBD_unplug of Vbd.id * bool
+  | VBD_deactivate of Vbd.id * bool
+  | VBD_detach of Vbd.id
   | VBD_insert of Vbd.id * disk
   | VBD_set_active of Vbd.id * bool
   | VM_remove of Vm.id
@@ -195,6 +201,10 @@ let rec name_of_atomic = function
       "VM_hook_script"
   | VBD_plug _ ->
       "VBD_plug"
+  | VBD_attach _ ->
+      "VBD_attach"
+  | VBD_activate _ ->
+      "VBD_activate"
   | VBD_epoch_begin _ ->
       "VBD_epoch_begin"
   | VBD_epoch_end _ ->
@@ -203,6 +213,10 @@ let rec name_of_atomic = function
       "VBD_set_qos"
   | VBD_unplug _ ->
       "VBD_unplug"
+  | VBD_deactivate _ ->
+      "VBD_deactivate"
+  | VBD_detach _ ->
+      "VBD_detach"
   | VBD_insert _ ->
       "VBD_insert"
   | VBD_set_active _ ->
@@ -1580,6 +1594,18 @@ let parallel_map name ~id lst f = parallel name ~id (List.concat_map f lst)
 
 let map_or_empty f x = Option.value ~default:[] (Option.map f x)
 
+let split_plug_atomic id vbd_id =
+  if !split_plug_unplug_atomics then
+    List.hd (serial "VBD.attach_and_activate" ~id [VBD_attach vbd_id; VBD_activate vbd_id])
+  else
+    VBD_plug vbd_id
+
+let split_unplug_atomic id vbd_id force =
+  if !split_plug_unplug_atomics then
+    List.hd (serial "VBD.deactivate_and_detach" ~id [VBD_deactivate (vbd_id, force); VBD_detach vbd_id])
+  else
+    VBD_unplug (vbd_id, force)
+
 let rec atomics_of_operation = function
   | VM_start (id, force) ->
       let vbds_rw, vbds_ro = VBD_DB.vbds id |> vbd_plug_sets in
@@ -1604,7 +1630,7 @@ let rec atomics_of_operation = function
                     [VBD_epoch_begin (vbd.Vbd.id, x, vbd.Vbd.persistent)]
                   )
                   vbd.Vbd.backend
-              ; [VBD_plug vbd.Vbd.id]
+              ; [split_plug_atomic id vbd.Vbd.id]
               ]
         )
       in
@@ -1668,7 +1694,7 @@ let rec atomics_of_operation = function
         ]
       ; parallel_concat "Devices.unplug" ~id
           [
-            List.map (fun vbd -> VBD_unplug (vbd.Vbd.id, true)) vbds
+            List.map (fun vbd -> split_unplug_atomic id vbd.Vbd.id true) vbds
           ; List.map (fun vif -> VIF_unplug (vif.Vif.id, true)) vifs
           ; List.map (fun pci -> PCI_unplug pci.Pci.id) pcis
           ]
@@ -1692,7 +1718,7 @@ let rec atomics_of_operation = function
         let name_one = pf "VBD.activate_and_plug %s" typ in
         parallel_map name_multi ~id vbds (fun vbd ->
             serial name_one ~id
-              [VBD_set_active (vbd.Vbd.id, true); VBD_plug vbd.Vbd.id]
+              [VBD_set_active (vbd.Vbd.id, true); split_plug_atomic id vbd.Vbd.id]
         )
       in
       [
@@ -1825,9 +1851,9 @@ let rec atomics_of_operation = function
       ]
       |> List.concat
   | VBD_hotplug id ->
-      [VBD_set_active (id, true); VBD_plug id]
+      [VBD_set_active (id, true); split_plug_atomic "VBD_hotplug" id]
   | VBD_hotunplug (id, force) ->
-      [VBD_unplug (id, force); VBD_set_active (id, false)]
+      [split_unplug_atomic "VBD_hotunplug" id force; VBD_set_active (id, false)]
   | VIF_hotplug id ->
       [VIF_set_active (id, true); VIF_plug id]
   | VIF_hotunplug (id, force) ->
@@ -2020,6 +2046,13 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       let vdi = B.VBD.attach t (VBD_DB.vm_of id) (VBD_DB.read_exn id) in
       B.VBD.activate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) vdi ;
       VBD_DB.signal id
+  | VBD_attach id ->
+    let _ = B.VBD.attach t (VBD_DB.vm_of id) (VBD_DB.read_exn id) in
+    (*Store VDI somehow*)
+    ()
+  | VBD_activate id ->
+    B.VBD.activate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
+    VBD_DB.signal id
   | VBD_set_active (id, b) ->
       debug "VBD.set_active %s %b" (VBD_DB.string_of_id id) b ;
       B.VBD.set_active t (VBD_DB.vm_of id) (VBD_DB.read_exn id) b ;
@@ -2039,6 +2072,16 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       finally
         (fun () ->
           B.VBD.deactivate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) force ;
+          B.VBD.detach t (VBD_DB.vm_of id) (VBD_DB.read_exn id)
+        )
+        (fun () -> VBD_DB.signal id)
+  | VBD_deactivate (id, force) ->
+    debug "VBD.deactivate %s" (VBD_DB.string_of_id id) ;
+    B.VBD.deactivate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) force ;
+  | VBD_detach id ->
+      debug "VBD.detach %s" (VBD_DB.string_of_id id) ;
+      finally
+        (fun () ->
           B.VBD.detach t (VBD_DB.vm_of id) (VBD_DB.read_exn id)
         )
         (fun () -> VBD_DB.signal id)
@@ -2449,11 +2492,15 @@ and trigger_cleanup_after_failure_atom op t =
   match op with
   | VBD_eject id
   | VBD_plug id
+  | VBD_attach id
+  | VBD_activate id
   | VBD_set_active (id, _)
   | VBD_epoch_begin (id, _, _)
   | VBD_epoch_end (id, _)
   | VBD_set_qos id
   | VBD_unplug (id, _)
+  | VBD_deactivate (id, _)
+  | VBD_detach (id)
   | VBD_insert (id, _) ->
       immediate_operation dbg (fst id) (VBD_check_state id)
   | VIF_plug id
