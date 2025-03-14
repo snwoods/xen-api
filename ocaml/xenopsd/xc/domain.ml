@@ -1697,7 +1697,8 @@ let suspend_emu_manager ~(task : Xenops_task.task_handle) ~xc:_ ~xs ~domain_type
       in
       (* Process started; wait for and respond to instructions *)
       let rec wait_for_message () =
-        with_tracing ~task ~name:"suspend_emu_manager wait_for_message" @@ fun () ->
+        with_tracing ~task ~name:"suspend_emu_manager wait_for_message"
+        @@ fun () ->
         debug "VM = %s; domid = %d; waiting for emu-manager..."
           (Uuidx.to_string uuid) domid ;
         let message = non_debug_receive ~debug_callback:callback cnx in

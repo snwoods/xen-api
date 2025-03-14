@@ -286,7 +286,8 @@ let options =
   ; ( "split-plug-unplug-atomics"
     , Arg.Bool (fun x -> Xenops_server.split_plug_unplug_atomics := x)
     , (fun () -> string_of_bool !Xenops_server.split_plug_unplug_atomics)
-    , "True if we want to split the plug/unplug atomics into attach/activate and detach/deactivate"
+    , "True if we want to split the plug/unplug atomics into attach/activate \
+       and detach/deactivate"
     )
   ]
 

@@ -1596,13 +1596,19 @@ let map_or_empty f x = Option.value ~default:[] (Option.map f x)
 
 let split_plug_atomic id vbd_id =
   if !split_plug_unplug_atomics then
-    List.hd (serial "VBD.attach_and_activate" ~id [VBD_attach vbd_id; VBD_activate vbd_id])
+    List.hd
+      (serial "VBD.attach_and_activate" ~id
+         [VBD_attach vbd_id; VBD_activate vbd_id]
+      )
   else
     VBD_plug vbd_id
 
 let split_unplug_atomic id vbd_id force =
   if !split_plug_unplug_atomics then
-    List.hd (serial "VBD.deactivate_and_detach" ~id [VBD_deactivate (vbd_id, force); VBD_detach vbd_id])
+    List.hd
+      (serial "VBD.deactivate_and_detach" ~id
+         [VBD_deactivate (vbd_id, force); VBD_detach vbd_id]
+      )
   else
     VBD_unplug (vbd_id, force)
 
@@ -1718,7 +1724,10 @@ let rec atomics_of_operation = function
         let name_one = pf "VBD.activate_and_plug %s" typ in
         parallel_map name_multi ~id vbds (fun vbd ->
             serial name_one ~id
-              [VBD_set_active (vbd.Vbd.id, true); split_plug_atomic id vbd.Vbd.id]
+              [
+                VBD_set_active (vbd.Vbd.id, true)
+              ; split_plug_atomic id vbd.Vbd.id
+              ]
         )
       in
       [
@@ -2047,10 +2056,10 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       B.VBD.activate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
       VBD_DB.signal id
   | VBD_attach id ->
-    B.VBD.attach t (VBD_DB.vm_of id) (VBD_DB.read_exn id)
+      B.VBD.attach t (VBD_DB.vm_of id) (VBD_DB.read_exn id)
   | VBD_activate id ->
-    B.VBD.activate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
-    VBD_DB.signal id
+      B.VBD.activate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) ;
+      VBD_DB.signal id
   | VBD_set_active (id, b) ->
       debug "VBD.set_active %s %b" (VBD_DB.string_of_id id) b ;
       B.VBD.set_active t (VBD_DB.vm_of id) (VBD_DB.read_exn id) b ;
@@ -2074,14 +2083,12 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
         )
         (fun () -> VBD_DB.signal id)
   | VBD_deactivate (id, force) ->
-    debug "VBD.deactivate %s" (VBD_DB.string_of_id id) ;
-    B.VBD.deactivate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) force ;
+      debug "VBD.deactivate %s" (VBD_DB.string_of_id id) ;
+      B.VBD.deactivate t (VBD_DB.vm_of id) (VBD_DB.read_exn id) force
   | VBD_detach id ->
       debug "VBD.detach %s" (VBD_DB.string_of_id id) ;
       finally
-        (fun () ->
-          B.VBD.detach t (VBD_DB.vm_of id) (VBD_DB.read_exn id)
-        )
+        (fun () -> B.VBD.detach t (VBD_DB.vm_of id) (VBD_DB.read_exn id))
         (fun () -> VBD_DB.signal id)
   | VBD_insert (id, disk) -> (
       (* NB this is also used to "refresh" ie signal a qemu that it should
@@ -2498,7 +2505,7 @@ and trigger_cleanup_after_failure_atom op t =
   | VBD_set_qos id
   | VBD_unplug (id, _)
   | VBD_deactivate (id, _)
-  | VBD_detach (id)
+  | VBD_detach id
   | VBD_insert (id, _) ->
       immediate_operation dbg (fst id) (VBD_check_state id)
   | VIF_plug id
