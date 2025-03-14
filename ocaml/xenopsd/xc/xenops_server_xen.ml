@@ -3889,23 +3889,23 @@ module VBD = struct
           )
           (fun () -> cleanup_attached_vdis vm vbd.id)
 
-  let unplug task vm vbd force =
-    with_tracing ~task ~name:"VBD_unplug" @@ fun () ->
+  let deactivate task vm vbd force =
+    with_tracing ~task ~name:"VBD_deactivate" @@ fun () ->
     with_xc_and_xs (fun xc xs ->
         try
           (* On destroying the datapath
 
-             1. if the device has already been shutdown and deactivated (as in
-             suspend) we must call DP.destroy here to avoid leaks
+              1. if the device has already been shutdown and deactivated (as in
+              suspend) we must call DP.destroy here to avoid leaks
 
-             2. if the device is successfully shutdown here then we must call
-             DP.destroy because no-one else will
+              2. if the device is successfully shutdown here then we must call
+              DP.destroy because no-one else will
 
-             3. if the device shutdown is rejected then we should leave the DP
-             alone and rely on the event thread calling us again later. *)
+              3. if the device shutdown is rejected then we should leave the DP
+              alone and rely on the event thread calling us again later. *)
           let domid = domid_of_uuid ~xs (uuid_of_string vm) in
           (* If the device is gone then we don't need to shut it down but we do
-             need to free any storage resources. *)
+              need to free any storage resources. *)
           let dev =
             try
               Some (device_by_id xc xs vm (device_kind_of ~xs vbd) (id_of vbd))
@@ -3943,8 +3943,9 @@ module VBD = struct
                   vm (id_of vbd) ;
               (* this happens on normal shutdown too *)
               (* Case (1): success; Case (2): success; Case (3): an exception is
-                 thrown *)
-              with_tracing ~task ~name:"VBD_device_shutdown" @@ fun () ->
+                  thrown *)
+              with_tracing ~task ~name:"VBD_deactivate_clean_shutdown"
+              @@ fun () ->
               Xenops_task.with_subtask task
                 (Printf.sprintf "Vbd.clean_shutdown %s" (id_of vbd))
                 (fun () ->
@@ -3954,10 +3955,10 @@ module VBD = struct
             )
             dev ;
           (* We now have a shutdown device but an active DP: we should destroy
-             the DP if the backend is of type VDI *)
+              the DP if the backend is of type VDI *)
           finally
             (fun () ->
-              ( with_tracing ~task ~name:"VBD_device_release" @@ fun () ->
+              ( with_tracing ~task ~name:"VBD_deactivate_release" @@ fun () ->
                 Option.iter
                   (fun dev ->
                     Xenops_task.with_subtask task
@@ -3967,7 +3968,7 @@ module VBD = struct
                   dev
               ) ;
               (* If we have a qemu frontend, detach this too. *)
-              with_tracing ~task ~name:"VBD_detach_qemu" @@ fun () ->
+              with_tracing ~task ~name:"VBD_deactivate_detach_qemu" @@ fun () ->
               let _ =
                 DB.update vm
                   (Option.map (fun vm_t ->
@@ -3998,11 +3999,14 @@ module VBD = struct
               ()
             )
             (fun () ->
-              with_tracing ~task ~name:"VBD_dp_destroy" @@ fun () ->
+              with_tracing ~task ~name:"VBD_deactivate_deactivate" @@ fun () ->
+              let vmid = Storage.vm_of_domid domid in
               match (domid, backend) with
-              | Some x, None | Some x, Some (VDI _) ->
-                  Storage.dp_destroy task
-                    (Storage.id_of (string_of_int x) vbd.Vbd.id)
+              | Some x, Some (VDI path) ->
+                  let sr, vdi = Storage.get_disk_by_name task path in
+                  let dp = Storage.id_of (string_of_int x) vbd.id in
+                  Storage.deactivate task dp sr vdi vmid
+              (* TODO Do we only need to deactivate VDIs, not Local or CD? *)
               | _ ->
                   ()
             )
@@ -4010,6 +4014,47 @@ module VBD = struct
           debug "Caught Device_error: %s" s ;
           raise (Xenopsd_error (Device_detach_rejected ("VBD", id_of vbd, s)))
     )
+
+  let detach task vm vbd =
+    with_tracing ~task ~name:"VBD_detach" @@ fun () ->
+    with_xc_and_xs (fun xc xs ->
+        let domid = domid_of_uuid ~xs (uuid_of_string vm) in
+        let dev =
+          try
+            Some (device_by_id xc xs vm (device_kind_of ~xs vbd) (id_of vbd))
+          with
+          | Xenopsd_error (Does_not_exist (_, _)) ->
+              debug "VM = %s; VBD = %s; Ignoring missing domain" vm (id_of vbd) ;
+              None
+          | Xenopsd_error Device_not_connected ->
+              debug "VM = %s; VBD = %s; Ignoring missing device" vm (id_of vbd) ;
+              None
+        in
+        let backend =
+          match dev with
+          | None ->
+              None
+          | Some dv -> (
+            match
+              Rpcmarshal.unmarshal typ_of_backend
+                (Device.Generic.get_private_key ~xs dv _vdi_id
+                |> Jsonrpc.of_string
+                )
+            with
+            | Ok x ->
+                x
+            | Error (`Msg m) ->
+                internal_error "Failed to unmarshal VBD backend: %s" m
+          )
+        in
+        with_tracing ~task ~name:"VBD_detach_dp_destroy" @@ fun () ->
+        match (domid, backend) with
+        | Some x, None | Some x, Some (VDI _) ->
+            Storage.dp_destroy task (Storage.id_of (string_of_int x) vbd.Vbd.id)
+        | _ ->
+            ()
+    ) ;
+    cleanup_attached_vdis vm vbd.id
 
   let insert task vm vbd d =
     on_frontend

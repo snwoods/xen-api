@@ -84,6 +84,9 @@ let deactivate task dp sr vdi vmdomid =
     (Printf.sprintf "VDI.deactivate %s" dp)
     (transform_exception (fun () -> Client.VDI.deactivate dbg dp sr vdi vmdomid))
 
+(* TODO replace DP.destroy with something that just detaches? *)
+(* This should work for now as, based on current usage of deactivate above during migrate,
+    DP.destroy must have an idempotent deactivate, so can be safely used just for its detach *)
 let dp_destroy task dp =
   Xenops_task.with_subtask task
     (Printf.sprintf "DP.destroy %s" dp)
