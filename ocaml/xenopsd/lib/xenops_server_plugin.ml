@@ -211,9 +211,9 @@ module type S = sig
 
     val plug : Xenops_task.task_handle -> Vm.id -> Vbd.t -> unit
 
-    val attach : Xenops_task.task_handle -> Vm.id -> Vbd.t -> attached_vdi option
+    val attach : Xenops_task.task_handle -> Vm.id -> Vbd.t -> unit
 
-    val activate : Xenops_task.task_handle -> Vm.id -> Vbd.t -> attached_vdi option -> unit
+    val activate : Xenops_task.task_handle -> Vm.id -> Vbd.t -> unit
 
     val unplug : Xenops_task.task_handle -> Vm.id -> Vbd.t -> bool -> unit
 
