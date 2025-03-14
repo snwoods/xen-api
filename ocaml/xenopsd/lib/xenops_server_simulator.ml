@@ -677,6 +677,10 @@ module VBD = struct
 
   let unplug _ vm vbd _ = with_lock m (remove_vbd vm vbd)
 
+  let deactivate _ vm vbd _ = with_lock m (remove_vbd vm vbd)
+
+  let detach _ _vm _vbd = ()
+
   let insert _ _vm _vbd _disk = ()
 
   let eject _ _vm _vbd = ()

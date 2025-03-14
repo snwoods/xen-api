@@ -283,6 +283,11 @@ let options =
     , (fun () -> string_of_int !test_open)
     , "TESTING only: open N file descriptors"
     )
+  ; ( "xenopsd-vbd-unplug-legacy"
+    , Arg.Bool (fun x -> Xenops_server.xenopsd_vbd_unplug_legacy := x)
+    , (fun () -> string_of_bool !Xenops_server.xenopsd_vbd_unplug_legacy)
+    , "False if we want to split the unplug atomic into deactivate/detach"
+    )
   ]
 
 let path () = Filename.concat !sockets_path "xenopsd"
