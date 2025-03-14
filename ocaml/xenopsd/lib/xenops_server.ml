@@ -37,7 +37,7 @@ let finally = Xapi_stdext_pervasives.Pervasiveext.finally
 
 let domain_shutdown_ack_timeout = ref 60.
 
-let split_plug_unplug_atomics = ref false
+let split_plug_unplug_atomics = ref true
 
 type context = {
     transferred_fd: Unix.file_descr option
