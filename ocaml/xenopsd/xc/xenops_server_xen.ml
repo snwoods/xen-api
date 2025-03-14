@@ -3650,6 +3650,7 @@ module VBD = struct
     Device_common.backend_path_of_device ~xs device ^ "/vdi"
 
   let plug task vm vbd =
+    with_tracing ~task ~name:"VBD_plug" @@ fun () ->
     (* If the vbd isn't listed as "active" then we don't automatically plug this
        one in *)
     if not (get_active vm vbd) then
@@ -3720,6 +3721,7 @@ module VBD = struct
               }
             in
             let dev =
+              with_tracing ~task ~name:"VBD_device_add" @@ fun () ->
               Xenops_task.with_subtask task
                 (Printf.sprintf "Vbd.add %s" (id_of vbd))
                 (fun () ->
@@ -3729,13 +3731,16 @@ module VBD = struct
                 )
             in
             (* We store away the disk so we can implement VBD.stat *)
-            Option.iter
-              (fun d ->
-                xs.Xs.write
-                  (vdi_path_of_device ~xs dev)
-                  (d |> rpc_of disk |> Jsonrpc.to_string)
-              )
-              vbd.backend ;
+            ( with_tracing ~task ~name:"VBD_xs_write" @@ fun () ->
+              Option.iter
+                (fun d ->
+                  xs.Xs.write
+                    (vdi_path_of_device ~xs dev)
+                    (d |> rpc_of disk |> Jsonrpc.to_string)
+                )
+                vbd.backend
+            ) ;
+            with_tracing ~task ~name:"VBD_attach_qemu" @@ fun () ->
             (* NB now the frontend position has been resolved *)
             let open Device_common in
             let device_number =
@@ -3798,6 +3803,7 @@ module VBD = struct
         vm
 
   let unplug task vm vbd force =
+    with_tracing ~task ~name:"VBD_unplug" @@ fun () ->
     with_xc_and_xs (fun xc xs ->
         try
           (* On destroying the datapath
@@ -3851,6 +3857,7 @@ module VBD = struct
               (* this happens on normal shutdown too *)
               (* Case (1): success; Case (2): success; Case (3): an exception is
                  thrown *)
+              with_tracing ~task ~name:"VBD_device_shutdown" @@ fun () ->
               Xenops_task.with_subtask task
                 (Printf.sprintf "Vbd.clean_shutdown %s" (id_of vbd))
                 (fun () ->
@@ -3863,14 +3870,17 @@ module VBD = struct
              the DP if the backend is of type VDI *)
           finally
             (fun () ->
-              Option.iter
-                (fun dev ->
-                  Xenops_task.with_subtask task
-                    (Printf.sprintf "Vbd.release %s" (id_of vbd))
-                    (fun () -> Device.Vbd.release task ~xc ~xs dev)
-                )
-                dev ;
+              ( with_tracing ~task ~name:"VBD_device_release" @@ fun () ->
+                Option.iter
+                  (fun dev ->
+                    Xenops_task.with_subtask task
+                      (Printf.sprintf "Vbd.release %s" (id_of vbd))
+                      (fun () -> Device.Vbd.release task ~xc ~xs dev)
+                  )
+                  dev
+              ) ;
               (* If we have a qemu frontend, detach this too. *)
+              with_tracing ~task ~name:"VBD_detach_qemu" @@ fun () ->
               let _ =
                 DB.update vm
                   (Option.map (fun vm_t ->
@@ -3901,6 +3911,7 @@ module VBD = struct
               ()
             )
             (fun () ->
+              with_tracing ~task ~name:"VBD_dp_destroy" @@ fun () ->
               match (domid, backend) with
               | Some x, None | Some x, Some (VDI _) ->
                   Storage.dp_destroy task
