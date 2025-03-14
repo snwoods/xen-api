@@ -675,6 +675,10 @@ module VBD = struct
 
   let plug _ (vm : Vm.id) (vbd : Vbd.t) = with_lock m (add_vbd vm vbd)
 
+  let attach _ (vm : Vm.id) (vbd : Vbd.t) = with_lock m (add_vbd vm vbd)
+
+  let activate _ (_vm : Vm.id) (_vbd : Vbd.t) = ()
+
   let unplug _ vm vbd _ = with_lock m (remove_vbd vm vbd)
 
   let insert _ _vm _vbd _disk = ()
