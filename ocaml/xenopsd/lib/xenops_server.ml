@@ -327,9 +327,9 @@ type vm_receive_op = {
 [@@deriving rpcty]
 
 type operation =
-  | VM_start of (Vm.id * bool) (* VM id * 'force' *)
+  | VM_start of (Vm.id * bool * bool) (* VM id * 'force' * 'reboot' *)
   | VM_poweroff of (Vm.id * float option)
-  | VM_shutdown of (Vm.id * float option)
+  | VM_shutdown of (Vm.id * float option * bool)
   | VM_reboot of (Vm.id * float option)
   | VM_suspend of (Vm.id * data)
   | VM_resume of (Vm.id * data)
@@ -1596,26 +1596,32 @@ let parallel_map name ~id lst f = parallel name ~id (List.concat_map f lst)
 
 let map_or_empty f x = Option.value ~default:[] (Option.map f x)
 
-let split_plug_atomic id vbd_id =
-  if !xenopsd_vbd_plug_legacy then
+let split_plug_atomic id vbd_id reboot =
+  match !xenopsd_vbd_unplug_legacy, reboot with
+  | true, _ ->
     VBD_plug vbd_id
-  else
+  | false, false ->
     List.hd
       (serial "VBD.attach_and_activate" ~id
          [VBD_attach vbd_id; VBD_activate vbd_id]
       )
+  | false, true ->
+    VBD_activate (vbd_id)
 
-let split_unplug_atomic id vbd_id force =
-  if !xenopsd_vbd_unplug_legacy then
+let split_unplug_atomic id vbd_id force reboot =
+  match !xenopsd_vbd_unplug_legacy, reboot with
+  | true, _ ->
     VBD_unplug (vbd_id, force)
-  else
+  | false, false ->
     List.hd
       (serial "VBD.deactivate_and_detach" ~id
          [VBD_deactivate (vbd_id, force); VBD_detach vbd_id]
       )
+  | false, true ->
+    VBD_deactivate (vbd_id, force)
 
 let rec atomics_of_operation = function
-  | VM_start (id, force) ->
+  | VM_start (id, force, reboot) ->
       let vbds_rw, vbds_ro = VBD_DB.vbds id |> vbd_plug_sets in
       let vifs = VIF_DB.vifs id |> vif_plug_order in
       let vgpus = VGPU_DB.vgpus id in
@@ -1638,7 +1644,7 @@ let rec atomics_of_operation = function
                     [VBD_epoch_begin (vbd.Vbd.id, x, vbd.Vbd.persistent)]
                   )
                   vbd.Vbd.backend
-              ; [split_plug_atomic id vbd.Vbd.id]
+              ; [split_plug_atomic id vbd.Vbd.id reboot]
               ]
         )
       in
@@ -1682,7 +1688,7 @@ let rec atomics_of_operation = function
       ; [VM_set_domain_action_request (id, None)]
       ]
       |> List.concat
-  | VM_shutdown (id, timeout) ->
+  | VM_shutdown (id, timeout, reboot) ->
       let vbds = VBD_DB.vbds id in
       let vifs = VIF_DB.vifs id in
       let pcis = PCI_DB.pcis id in
@@ -1702,7 +1708,7 @@ let rec atomics_of_operation = function
         ]
       ; parallel_concat "Devices.unplug" ~id
           [
-            List.map (fun vbd -> split_unplug_atomic id vbd.Vbd.id true) vbds
+            List.map (fun vbd -> split_unplug_atomic id vbd.Vbd.id true reboot) vbds
           ; List.map (fun vif -> VIF_unplug (vif.Vif.id, true)) vifs
           ; List.map (fun pci -> PCI_unplug pci.Pci.id) pcis
           ]
@@ -1728,7 +1734,7 @@ let rec atomics_of_operation = function
             serial name_one ~id
               [
                 VBD_set_active (vbd.Vbd.id, true)
-              ; split_plug_atomic id vbd.Vbd.id
+              ; split_plug_atomic id vbd.Vbd.id false
               ]
         )
       in
@@ -1770,7 +1776,7 @@ let rec atomics_of_operation = function
       in
       [
         [VM_hook_script (id, Xenops_hooks.VM_pre_destroy, reason)]
-      ; atomics_of_operation (VM_shutdown (id, timeout))
+      ; atomics_of_operation (VM_shutdown (id, timeout, false))
       ; parallel_concat "Devices.deactivate" ~id
           [
             List.concat_map unplug_vbd vbds
@@ -1791,7 +1797,7 @@ let rec atomics_of_operation = function
       [
         map_or_empty (fun x -> [VM_shutdown_domain (id, Reboot, x)]) timeout
       ; [VM_hook_script (id, Xenops_hooks.VM_pre_destroy, reason)]
-      ; atomics_of_operation (VM_shutdown (id, None))
+      ; atomics_of_operation (VM_shutdown (id, None, true))
       ; parallel_map "VBD.epoch_end" ~id vbds (fun vbd ->
             map_or_empty
               (fun x -> [VBD_epoch_end (vbd.Vbd.id, x)])
@@ -1802,7 +1808,7 @@ let rec atomics_of_operation = function
         ; VM_hook_script
             (id, Xenops_hooks.VM_pre_reboot, Xenops_hooks.reason__none)
         ]
-      ; atomics_of_operation (VM_start (id, false))
+      ; atomics_of_operation (VM_start (id, false, true))
       ; [VM_unpause id]
       ]
       |> List.concat
@@ -1817,7 +1823,7 @@ let rec atomics_of_operation = function
         ; VM_hook_script
             (id, Xenops_hooks.VM_pre_destroy, Xenops_hooks.reason__suspend)
         ]
-      ; atomics_of_operation (VM_shutdown (id, None))
+      ; atomics_of_operation (VM_shutdown (id, None, false))
       ; [
           VM_hook_script
             (id, Xenops_hooks.VM_post_destroy, Xenops_hooks.reason__suspend)
@@ -1862,9 +1868,9 @@ let rec atomics_of_operation = function
       ]
       |> List.concat
   | VBD_hotplug id ->
-      [VBD_set_active (id, true); split_plug_atomic "VBD_hotplug" id]
+      [VBD_set_active (id, true); split_plug_atomic "VBD_hotplug" id false]
   | VBD_hotunplug (id, force) ->
-      [split_unplug_atomic "VBD_hotunplug" id force; VBD_set_active (id, false)]
+      [split_unplug_atomic "VBD_hotunplug" id force false; VBD_set_active (id, false)]
   | VIF_hotplug id ->
       [VIF_set_active (id, true); VIF_plug id]
   | VIF_hotunplug (id, force) ->
@@ -2468,10 +2474,10 @@ and trigger_cleanup_after_failure op t =
   | VUSB_check_state _
   | VIF_check_state _ ->
       () (* not state changing operations *)
-  | VM_start (id, _)
+  | VM_start (id, _, _)
   | VM_poweroff (id, _)
   | VM_reboot (id, _)
-  | VM_shutdown (id, _)
+  | VM_shutdown (id, _, _)
   | VM_suspend (id, _)
   | VM_restore_vifs id
   | VM_restore_devices (id, _)
@@ -2566,8 +2572,8 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
   let module B = (val get_backend () : S) in
   with_tracing ~name:(name_of_operation op) ~task:t @@ fun () ->
   match op with
-  | VM_start (id, force) -> (
-      debug "VM.start %s (force=%b)" id force ;
+  | VM_start (id, force, reboot) -> (
+      debug "VM.start %s (force=%b, reboot=%b)" id force reboot ;
       let power = (B.VM.get_state (VM_DB.read_exn id)).Vm.power_state in
       match power with
       | Running ->
@@ -2584,7 +2590,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
       debug "VM.reboot %s" id ;
       rebooting id (fun () -> perform_atomics (atomics_of_operation op) t) ;
       VM_DB.signal id
-  | VM_shutdown (id, _timeout) ->
+  | VM_shutdown (id, _timeout, _force) ->
       debug "VM.shutdown %s" id ;
       perform_atomics (atomics_of_operation op) t ;
       VM_DB.signal id
@@ -2834,7 +2840,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
             , new_src_id
             )
         ]
-        @ atomics_of_operation (VM_shutdown (new_src_id, None))
+        @ atomics_of_operation (VM_shutdown (new_src_id, None, false))
         @ [
             VM_hook_script_stable
               ( id
@@ -3052,7 +3058,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
             Debug.log_backtrace e (Backtrace.get e) ;
             debug "Caught %s: cleaning up VM state" (Printexc.to_string e) ;
             perform_atomics
-              (atomics_of_operation (VM_shutdown (id, None)) @ [VM_remove id])
+              (atomics_of_operation (VM_shutdown (id, None, false)) @ [VM_remove id])
               t
           )
           (fun () -> Handshake.send s (Handshake.Error (Printexc.to_string e)))
@@ -3091,7 +3097,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
         | Vm.Coredump ->
             []
         | Vm.Shutdown ->
-            [VM_shutdown (id, None)]
+            [VM_shutdown (id, None, false)]
         | Vm.Start ->
             let delay =
               if run_time < B.VM.minimum_reboot_delay then (
@@ -3215,7 +3221,7 @@ and verify_power_state op =
       raise (Xenopsd_error (Bad_power_state (power, expected')))
   in
   match op with
-  | VM_start (id, _) ->
+  | VM_start (id, _, _) ->
       assert_power_state_is id [Halted]
   | VM_reboot (id, _) ->
       assert_power_state_is id [Running; Paused]
@@ -3622,7 +3628,7 @@ module VM = struct
 
   let delay _ dbg id t = queue_operation dbg id (Atomic (VM_delay (id, t)))
 
-  let start _ dbg id force = queue_operation dbg id (VM_start (id, force))
+  let start _ dbg id force = queue_operation dbg id (VM_start (id, force, false))
 
   let shutdown _ dbg id timeout =
     queue_operation dbg id (VM_poweroff (id, timeout))
