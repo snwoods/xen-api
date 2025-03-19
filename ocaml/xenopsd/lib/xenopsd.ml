@@ -368,13 +368,17 @@ let handle_received_fd this_connection =
           this_connection context
       in
       let uri = req.Xenops_migrate.Forwarded_http_request.uri in
-      if has_prefix uri memory_prefix then
+      if has_prefix uri memory_prefix then (
+        debug "VM.receive memory has_prefix memory" ;
         do_receive Xenops_server.VM.receive_memory
+      )
       else if has_prefix uri migrate_vgpu_prefix then
         do_receive Xenops_server.VM.receive_vgpu
       (* new routes but using same handlers *)
-      else if has_prefix uri migrate_vm then
+      else if has_prefix uri migrate_vm then (
+        debug "VM.receive memory has_prefix migrate_vm" ;
         do_receive Xenops_server.VM.receive_memory
+      )
       else if has_prefix uri migrate_mem then
         do_receive Xenops_server.VM.receive_mem
       else if has_prefix uri migrate_vgpu then
@@ -452,6 +456,7 @@ let main backend =
   (* Set service name for Tracing *)
   Tracing_export.set_service_name "xenopsd" ;
   (* Listen for transferred file descriptors *)
+  debug "This is calling VM_receive_memory maybe?" ;
   let forwarded_server =
     Xcp_service.make_socket_server (forwarded_path ()) handle_received_fd
   in
