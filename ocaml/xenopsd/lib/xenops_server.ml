@@ -2044,8 +2044,10 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       B.VIF.set_active t (VIF_DB.vm_of id) (VIF_DB.read_exn id) b ;
       VIF_DB.signal id
   | VM_hook_script_stable (id, script, reason, backend_vm_id) ->
+      debug "Before VM_hook_script_stable" ;
       let extra_args = B.VM.get_hook_args backend_vm_id in
-      Xenops_hooks.vm ~script ~reason ~id ~extra_args
+      Xenops_hooks.vm ~script ~reason ~id ~extra_args ;
+      debug "After VM_hook_script_stable"
   | VM_hook_script (id, script, reason) ->
       let extra_args = B.VM.get_hook_args id in
       Xenops_hooks.vm ~script ~reason ~id ~extra_args
@@ -2795,7 +2797,21 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
 
                 compress mem_fd @@ fun mem_fd ->
                 compress_vgpu vgpu_fd @@ fun vgpu_fd ->
+                let vbds = VBD_DB.vbds new_src_id in
+                (* Using mapi as below as fold wasn't working for some reason *)
+                let _ = (parallel_concat "VBDs.plug" ~id:new_src_id [List.mapi (fun i vbd ->
+                  (match vbd.Vbd.id with
+                  | k, v ->
+                    debug "vbd%d: =%s, %s" i k v) ;
+                  vbd_plug vbd.Vbd.id) vbds])
+                in
                 perform_atomics
+                  (*(parallel_concat "VBDs.plug" ~id:new_src_id [List.mapi (fun i vbd ->
+                    (match vbd.Vbd.id with
+                    | k, v ->
+                      debug "vbd%d: =%s, %s" i k v) ;
+                    vbd_plug vbd.Vbd.id) vbds]
+                  @*)
                   [
                     VM_save (id, [Live], FD mem_fd, vgpu_fd)
                   ; VM_rename (id, new_src_id, Pre_migration)
@@ -3034,7 +3050,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
           debug "VM.receive_memory: Renaming domain" ;
           perform_atomics [VM_rename (id, final_id, Post_migration)] t
         ) ;
-        debug "VM.receive_memory: restoring remaining devices and unpausing" ;
+        debug "VM.receive_memory: restoring remaining devices and unpausing. final_id=%s" final_id ;
         perform_atomics
           (atomics_of_operation (VM_restore_devices (final_id, false))
           @ [
