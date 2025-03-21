@@ -2746,6 +2746,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
             [("memory_limit", Int64.to_string state.Vm.memory_limit)]
             url ;
           let first_handshake () =
+            with_tracing ~name:"VM_migrate_first_handshake" ~task:t @@ fun () ->
             ( match Handshake.recv vm_fd with
             | Handshake.Success ->
                 ()
@@ -2766,6 +2767,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
             debug "VM.migrate: Synchronisation point 1"
           in
           let final_handshake () =
+            with_tracing ~name:"VM_migrate_final_handshake" ~task:t @@ fun () ->
             Handshake.send vm_fd Handshake.Success ;
             debug "VM.migrate: Synchronisation point 3" ;
             match Handshake.recv vm_fd with
@@ -2781,6 +2783,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
                   msg
           in
           let save ?vgpu_fd () =
+            with_tracing ~name:"VM_migrate_save" ~task:t @@ fun () ->
             let url = make_url "/migrate/mem/" new_dest_id in
             Open_uri.with_open_uri ~verify_cert url (fun mem_fd ->
                 (* vm_fd: signaling channel, mem_fd: memory stream *)
@@ -2805,6 +2808,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
              the main VM migration sequence. *)
           match VGPU_DB.ids id with
           | [] ->
+              with_tracing ~name:"handshake_save_handshake" ~task:t @@ fun () ->
               first_handshake () ; save () ; final_handshake ()
           | (_vm_id, dev_id) :: _ ->
               let url =
