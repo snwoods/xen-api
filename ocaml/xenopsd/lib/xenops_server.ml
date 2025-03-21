@@ -2044,8 +2044,10 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       B.VIF.set_active t (VIF_DB.vm_of id) (VIF_DB.read_exn id) b ;
       VIF_DB.signal id
   | VM_hook_script_stable (id, script, reason, backend_vm_id) ->
+      debug "Before VM_hook_script_stable" ;
       let extra_args = B.VM.get_hook_args backend_vm_id in
-      Xenops_hooks.vm ~script ~reason ~id ~extra_args
+      Xenops_hooks.vm ~script ~reason ~id ~extra_args ;
+      debug "After VM_hook_script_stable"
   | VM_hook_script (id, script, reason) ->
       let extra_args = B.VM.get_hook_args id in
       Xenops_hooks.vm ~script ~reason ~id ~extra_args
@@ -2748,6 +2750,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
             [("memory_limit", Int64.to_string state.Vm.memory_limit)]
             url ;
           let first_handshake () =
+            with_tracing ~name:"VM_migrate_first_handshake" ~task:t @@ fun () ->
             ( match Handshake.recv vm_fd with
             | Handshake.Success ->
                 ()
@@ -2768,6 +2771,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
             debug "VM.migrate: Synchronisation point 1"
           in
           let final_handshake () =
+            with_tracing ~name:"VM_migrate_final_handshake" ~task:t @@ fun () ->
             Handshake.send vm_fd Handshake.Success ;
             debug "VM.migrate: Synchronisation point 3" ;
             match Handshake.recv vm_fd with
@@ -2783,6 +2787,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
                   msg
           in
           let save ?vgpu_fd () =
+            with_tracing ~name:"VM_migrate_save" ~task:t @@ fun () ->
             let url = make_url "/migrate/mem/" new_dest_id in
             Open_uri.with_open_uri ~verify_cert url (fun mem_fd ->
                 (* vm_fd: signaling channel, mem_fd: memory stream *)
@@ -2807,6 +2812,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
              the main VM migration sequence. *)
           match VGPU_DB.ids id with
           | [] ->
+              with_tracing ~name:"handshake_save_handshake" ~task:t @@ fun () ->
               first_handshake () ; save () ; final_handshake ()
           | (_vm_id, dev_id) :: _ ->
               let url =
@@ -2847,6 +2853,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
           ; VM_remove new_src_id
           ]
       in
+      with_tracing ~name:"operations_incl_shutdown" ~task:t @@ fun () ->
       perform_atomics atomics t
   | VM_receive_memory
       {
@@ -3031,7 +3038,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
           debug "VM.receive_memory: Renaming domain" ;
           perform_atomics [VM_rename (id, final_id, Post_migration)] t
         ) ;
-        debug "VM.receive_memory: restoring remaining devices and unpausing" ;
+        debug "VM.receive_memory: restoring remaining devices and unpausing. final_id=%s" final_id ;
         perform_atomics
           (atomics_of_operation (VM_restore_devices (final_id, false))
           @ [
