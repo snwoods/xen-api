@@ -2849,6 +2849,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
           ; VM_remove new_src_id
           ]
       in
+      with_tracing ~name:"operations_incl_shutdown" ~task:t @@ fun () ->
       perform_atomics atomics t
   | VM_receive_memory
       {
