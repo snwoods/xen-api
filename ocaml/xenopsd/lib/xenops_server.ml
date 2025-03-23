@@ -37,7 +37,7 @@ let finally = Xapi_stdext_pervasives.Pervasiveext.finally
 
 let domain_shutdown_ack_timeout = ref 60.
 
-let xenopsd_vbd_plug_unplug_legacy = ref true
+let xenopsd_vbd_plug_unplug_legacy = ref false
 
 type context = {
     transferred_fd: Unix.file_descr option
