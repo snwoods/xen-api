@@ -332,7 +332,7 @@ type operation =
   | VM_suspend of (Vm.id * data)
   | VM_resume of (Vm.id * data)
   | VM_restore_vifs of Vm.id
-  | VM_restore_devices of (Vm.id * bool)
+  | VM_restore_devices of (Vm.id * bool * bool)
   | VM_migrate of vm_migrate_op
   | VM_receive_memory of vm_receive_op
   | VBD_hotplug of Vbd.id
@@ -1715,7 +1715,7 @@ let rec atomics_of_operation = function
           serial "VIF.activate_and_plug" ~id
             [VIF_set_active (vif.Vif.id, true); VIF_plug vif.Vif.id]
       )
-  | VM_restore_devices (id, restore_vifs) ->
+  | VM_restore_devices (id, restore_vifs, migration) ->
       let vbds_rw, vbds_ro = VBD_DB.vbds id |> vbd_plug_sets in
       let vgpus = VGPU_DB.vgpus id in
       let pcis = PCI_DB.pcis id |> pci_plug_order in
@@ -1729,10 +1729,22 @@ let rec atomics_of_operation = function
               [VBD_set_active (vbd.Vbd.id, true); vbd_plug vbd.Vbd.id]
         )
       in
+      let activate_vbds typ vbds =
+        let name_multi = Printf.sprintf "VBDs.activate %s" typ in
+        parallel name_multi ~id (List.map (fun vbd ->
+            VBD_activate vbd.Vbd.id
+        ) vbds)
+      in
+      let prep_vbds =
+        if migration then
+          activate_vbds
+        else
+          plug_vbds
+      in
       [
         (* rw vbds must be plugged before ro vbds, see vbd_plug_sets *)
-        plug_vbds "RW" vbds_rw
-      ; plug_vbds "RO" vbds_ro
+        prep_vbds "RW" vbds_rw
+      ; prep_vbds "RO" vbds_ro
       ; (if restore_vifs then atomics_of_operation (VM_restore_vifs id) else [])
       ; (* Nvidia SRIOV PCI devices have been already been plugged *)
         parallel_map "VGPUs.activate" ~id vgpus (fun vgpu ->
@@ -1849,7 +1861,7 @@ let rec atomics_of_operation = function
         ]
       ; vgpu_start_operations
       ; [VM_restore (id, data, vgpu_data)]
-      ; atomics_of_operation (VM_restore_devices (id, true))
+      ; atomics_of_operation (VM_restore_devices (id, true, false))
       ; [
           (* At this point the domain is considered survivable. *)
           VM_set_domain_action_request (id, None)
@@ -2479,7 +2491,7 @@ and trigger_cleanup_after_failure op t =
   | VM_shutdown (id, _)
   | VM_suspend (id, _)
   | VM_restore_vifs id
-  | VM_restore_devices (id, _)
+  | VM_restore_devices (id, _, _)
   | VM_resume (id, _) ->
       immediate_operation dbg id (VM_check_state id)
   | VM_receive_memory {vmr_id= id; vmr_final_id= final_id; _} ->
@@ -2600,9 +2612,9 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
   | VM_restore_vifs id ->
       debug "VM_restore_vifs %s" id ;
       perform_atomics (atomics_of_operation op) t
-  | VM_restore_devices (id, restore_vifs) ->
+  | VM_restore_devices (id, restore_vifs, migration) ->
       (* XXX: this is delayed due to the 'attach'/'activate' behaviour *)
-      debug "VM_restore_devices %s %b" id restore_vifs ;
+      debug "VM_restore_devices %s %b %b" id restore_vifs migration;
       perform_atomics (atomics_of_operation op) t
   | VM_resume (id, _data) ->
       debug "VM.resume %s" id ;
@@ -3044,7 +3056,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
         ) ;
         debug "VM.receive_memory: restoring remaining devices and unpausing. final_id=%s" final_id ;
         perform_atomics
-          (atomics_of_operation (VM_restore_devices (final_id, false))
+          (atomics_of_operation (VM_restore_devices (final_id, false, true))
           @ [
               VM_unpause final_id
             ; VM_set_domain_action_request (final_id, None)
