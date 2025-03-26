@@ -3578,11 +3578,13 @@ module VBD = struct
       match attached_vdi_from_vdi xs vdi with
       | Some attached_vdi, _ ->
           attached_vdi
-      | None, path ->
+      | None, path -> (
+          debug "_activate got some vdi path=%s" path ;
           let sr, vdi = Storage.get_disk_by_name task path in
           let dp = Storage.id_of (string_of_int frontend_domid) vbd.id in
           let vm = fst vbd.id in
           Storage.attach ~xc ~xs task vm dp sr vdi (vbd.mode = ReadWrite)
+      )
     in
     xs.Xs.write (vdi_attach_path vbd)
       (vdi |> rpc_of attached_vdi |> Jsonrpc.to_string) ;
@@ -3592,11 +3594,13 @@ module VBD = struct
     match attached_vdi_from_vdi xs vdi with
     | Some _, _ ->
         ()
-    | None, path ->
+    | None, path -> (
+        debug "_activate got some vdi path=%s" path ;
         let sr, vdi = Storage.get_disk_by_name task path in
         let dp = Storage.id_of (string_of_int frontend_domid) vbd.id in
         let vm = fst vbd.id in
         Storage.activate ~xc ~xs task vm dp sr vdi
+    )
 
   let frontend_domid_of_device device =
     device.Device_common.frontend.Device_common.domid
@@ -3693,33 +3697,42 @@ module VBD = struct
                  simulated by unplugging the whole drive"
                 vm ;
               None
-            ) else
+            ) else (
+              debug "Calling _attach" ;
               Some (_attach task xc xs frontend_domid vbd vbd.backend)
+            )
           )
           vm
     in
     match attached_vdi with
     | None ->
         ()
-    | Some vdi ->
+    | Some vdi -> (
+        debug "Got some attached_vdi" ;
         (* Record the attached_vdi so it can be used in activate *)
         let _ =
           DB.update_exn vm (fun vm_t ->
+              debug "attached_vdis length=%d with vbd.Vbd.id (%s, %s) = %b" (List.length vm_t.persistent.attached_vdis)
+                (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc vbd.Vbd.id vm_t.persistent.attached_vdis) ;
+              let attached_vdis_after_removal = List.remove_assoc vbd.Vbd.id vm_t.persistent.attached_vdis in
+              debug "attached_vdis length=%d with vbd.Vbd.id (%s, %s) = %b" (List.length attached_vdis_after_removal)
+                (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc vbd.Vbd.id attached_vdis_after_removal) ;
+              let after_adding = (vbd.Vbd.id, vdi) :: attached_vdis_after_removal in
+              debug "attached_vdis length=%d with vbd.Vbd.id (%s, %s) = %b" (List.length after_adding)
+                (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc vbd.Vbd.id after_adding) ;
               Some
                 VmExtra.
                   {
                     persistent=
                       {
                         vm_t.VmExtra.persistent with
-                        attached_vdis=
-                          (vbd.Vbd.id, vdi)
-                          :: List.remove_assoc vbd.Vbd.id
-                               vm_t.persistent.attached_vdis
+                        attached_vdis=after_adding
                       }
                   }
           )
         in
         ()
+    )
 
   let cleanup_attached_vdis vm vbd_id =
     let _ =
@@ -3735,6 +3748,8 @@ module VBD = struct
 
   let activate task vm vbd =
     let vmextra = DB.read_exn vm in
+    debug "attached_vdis length=%d with vbd.Vbd.id (%s, %s) = %b" (List.length vmextra.persistent.attached_vdis)
+      (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc vbd.Vbd.id vmextra.persistent.attached_vdis) ;
     match List.assoc_opt vbd.id vmextra.persistent.attached_vdis with
     | None ->
         debug "No attached_vdi info, so not activating"
