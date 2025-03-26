@@ -2925,6 +2925,10 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
                 @ (* Perform as many operations as possible on the destination
                      domain before pausing the original domain *)
                 atomics_of_operation (VM_restore_vifs id)
+                @
+                parallel_map "VBDs.set_active_and_attach" ~id (VBD_DB.vbds id) (fun vbd ->
+                  serial "VBD.set_active_and_attach" ~id [VBD_set_active (vbd.Vbd.id, true); VBD_attach vbd.Vbd.id]
+                )
                 )
                 t ;
               Handshake.send s Handshake.Success
