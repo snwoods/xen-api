@@ -185,7 +185,7 @@ module VmExtra = struct
     ; pv_drivers_detected: bool [@default false]
     ; xen_platform: (int * int) option (* (device_id, revision) for QEMU *)
     ; platformdata: (string * string) list [@default []]
-    ; attached_vdis: (Vbd.id * attached_vdi) list [@default []]
+    ; attached_vdis: (string * attached_vdi) list [@default []]
   }
   [@@deriving rpcty]
 
@@ -3712,14 +3712,14 @@ module VBD = struct
         (* Record the attached_vdi so it can be used in activate *)
         let _ =
           DB.update_exn vm (fun vm_t ->
-              debug "attached_vdis length=%d with vbd.Vbd.id (%s, %s) = %b" (List.length vm_t.persistent.attached_vdis)
-                (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc vbd.Vbd.id vm_t.persistent.attached_vdis) ;
-              let attached_vdis_after_removal = List.remove_assoc vbd.Vbd.id vm_t.persistent.attached_vdis in
-              debug "attached_vdis length=%d with vbd.Vbd.id (%s, %s) = %b" (List.length attached_vdis_after_removal)
-                (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc vbd.Vbd.id attached_vdis_after_removal) ;
-              let after_adding = (vbd.Vbd.id, vdi) :: attached_vdis_after_removal in
-              debug "attached_vdis length=%d with vbd.Vbd.id (%s, %s) = %b" (List.length after_adding)
-                (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc vbd.Vbd.id after_adding) ;
+              debug "Initial attached_vdis length=%d with vm=%s and vbd.id %s = %b" (List.length vm_t.persistent.attached_vdis)
+                (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc (snd vbd.Vbd.id) vm_t.persistent.attached_vdis) ;
+              let attached_vdis_after_removal = List.remove_assoc (snd vbd.Vbd.id) vm_t.persistent.attached_vdis in
+              debug "After removal attached_vdis length=%d with vm=%s and vbd.id %s = %b" (List.length vm_t.persistent.attached_vdis)
+                (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc (snd vbd.Vbd.id) attached_vdis_after_removal) ;
+              let after_adding = ((snd vbd.Vbd.id), vdi) :: attached_vdis_after_removal in
+              debug "After adding attached_vdis length=%d with vm=%s and vbd.id %s = %b" (List.length vm_t.persistent.attached_vdis)
+                (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc (snd vbd.Vbd.id) after_adding) ;
               Some
                 VmExtra.
                   {
@@ -3748,9 +3748,9 @@ module VBD = struct
 
   let activate task vm vbd =
     let vmextra = DB.read_exn vm in
-    debug "attached_vdis length=%d with vbd.Vbd.id (%s, %s) = %b" (List.length vmextra.persistent.attached_vdis)
-      (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc vbd.Vbd.id vmextra.persistent.attached_vdis) ;
-    match List.assoc_opt vbd.id vmextra.persistent.attached_vdis with
+    debug "Activate attached_vdis length=%d with vm=%s and vbd.id %s = %b" (List.length vmextra.persistent.attached_vdis)
+      (fst vbd.Vbd.id) (snd vbd.Vbd.id) (List.mem_assoc (snd vbd.Vbd.id) vmextra.persistent.attached_vdis) ;
+    match List.assoc_opt (snd vbd.Vbd.id) vmextra.persistent.attached_vdis with
     | None ->
         debug "No attached_vdi info, so not activating"
     | Some vdi ->
