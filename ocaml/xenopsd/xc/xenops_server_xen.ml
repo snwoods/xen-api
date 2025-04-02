@@ -3901,7 +3901,8 @@ module VBD = struct
               )
               vm
           )
-          (fun () -> cleanup_attached_vdis vm vbd.id)
+          (debug "Proving vm=%s is the same as fst Vbd.id=%s" vm (fst vbd.id) ;
+            fun () -> cleanup_attached_vdis vm (snd vbd.id))
 
   let deactivate task vm vbd force =
     with_xc_and_xs (fun xc xs ->
@@ -4065,7 +4066,8 @@ module VBD = struct
         | _ ->
             ()
     ) ;
-    cleanup_attached_vdis vm vbd.id
+    debug "Proving vm=%s is the same as fst Vbd.id=%s" vm (fst vbd.id) ;
+    cleanup_attached_vdis vm (snd vbd.id)
 
   let insert task vm vbd d =
     on_frontend
