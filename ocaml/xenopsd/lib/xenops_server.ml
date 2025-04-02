@@ -1735,10 +1735,10 @@ let rec atomics_of_operation = function
           (List.map (fun vbd -> VBD_activate vbd.Vbd.id) vbds)
       in
       let prep_vbds =
-        if migration then
-          activate_vbds
-        else
+        if !xenopsd_vbd_plug_unplug_legacy || not migration then
           plug_vbds
+        else
+          activate_vbds
       in
       [
         (* rw vbds must be plugged before ro vbds, see vbd_plug_sets *)
@@ -2924,15 +2924,25 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
           ( try
               let no_sharept = VGPU_DB.vgpus id |> List.exists is_no_sharept in
               debug "VM %s no_sharept=%b (%s)" id no_sharept __LOC__ ;
+              let early_attach =
+                if !xenopsd_vbd_plug_unplug_legacy then
+                  []
+                else
+                  parallel_map "VBDs.set_active_and_attach" ~id (VBD_DB.vbds id)
+                    (fun vbd ->
+                      serial "VBD.set_active_and_attach" ~id
+                        [
+                          VBD_set_active (vbd.Vbd.id, true)
+                        ; VBD_attach vbd.Vbd.id
+                        ]
+                  )
+              in
               perform_atomics
                 ([VM_create (id, Some memory_limit, Some final_id, no_sharept)]
-                @ (* Perform as many operations as possible on the destination
-                     domain before pausing the original domain *)
-                atomics_of_operation (VM_restore_vifs id)
-                @
-                parallel_map "VBDs.set_active_and_attach" ~id (VBD_DB.vbds id) (fun vbd ->
-                  serial "VBD.set_active_and_attach" ~id [VBD_set_active (vbd.Vbd.id, true); VBD_attach vbd.Vbd.id]
-                )
+                (* Perform as many operations as possible on the destination
+                   domain before pausing the original domain *)
+                @ atomics_of_operation (VM_restore_vifs id)
+                @ early_attach
                 )
                 t ;
               Handshake.send s Handshake.Success
