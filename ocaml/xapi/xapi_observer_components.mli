@@ -19,7 +19,8 @@
 
 (** Type for components that are instrumented with tracing.
   *)
-type t = Xapi | Xenopsd | Xapi_clusterd | SMApi [@@deriving ord]
+type t = Xapi | Xenopsd | Xapi_clusterd | SMApi | Xapi_storage_script
+[@@deriving ord]
 
 val all : t list
 (** List of all components available.

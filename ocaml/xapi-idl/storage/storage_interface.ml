@@ -1160,6 +1160,82 @@ module StorageAPI (R : RPC) = struct
       declare "UPDATES.get" []
         (dbg_p @-> from_p @-> timeout_p @-> returning result_p err)
   end
+
+  module Observer = struct
+    open TypeCombinators
+
+    let endpoints_p = Param.mk ~name:"endpoints" (list Types.string)
+
+    let bool_p = Param.mk ~name:"bool" Types.bool
+
+    let uuid_p = Param.mk ~name:"uuid" Types.string
+
+    let name_label_p = Param.mk ~name:"name_label" Types.string
+
+    let dict_p = Param.mk ~name:"dict" dict
+
+    let string_p = Param.mk ~name:"string" Types.string
+
+    let int_p = Param.mk ~name:"int" Types.int
+
+    let float_p = Param.mk ~name:"float" Types.float
+
+    let create =
+      declare "Observer.create" []
+        (dbg_p
+        @-> uuid_p
+        @-> name_label_p
+        @-> dict_p
+        @-> endpoints_p
+        @-> bool_p
+        @-> returning unit_p err
+        )
+
+    let destroy =
+      declare "Observer.destroy" [] (dbg_p @-> uuid_p @-> returning unit_p err)
+
+    let set_enabled =
+      declare "Observer.set_enabled" []
+        (dbg_p @-> uuid_p @-> bool_p @-> returning unit_p err)
+
+    let set_attributes =
+      declare "Observer.set_attributes" []
+        (dbg_p @-> uuid_p @-> dict_p @-> returning unit_p err)
+
+    let set_endpoints =
+      declare "Observer.set_endpoints" []
+        (dbg_p @-> uuid_p @-> endpoints_p @-> returning unit_p err)
+
+    let init = declare "Observer.init" [] (dbg_p @-> returning unit_p err)
+
+    let set_trace_log_dir =
+      declare "Observer.set_trace_log_dir" []
+        (dbg_p @-> string_p @-> returning unit_p err)
+
+    let set_export_interval =
+      declare "Observer.set_export_interval" []
+        (dbg_p @-> float_p @-> returning unit_p err)
+
+    let set_max_spans =
+      declare "Observer.set_max_spans" []
+        (dbg_p @-> int_p @-> returning unit_p err)
+
+    let set_max_traces =
+      declare "Observer.set_max_traces" []
+        (dbg_p @-> int_p @-> returning unit_p err)
+
+    let set_max_file_size =
+      declare "Observer.set_max_file_size" []
+        (dbg_p @-> int_p @-> returning unit_p err)
+
+    let set_host_id =
+      declare "Observer.set_host_id" []
+        (dbg_p @-> string_p @-> returning unit_p err)
+
+    let set_compress_tracing_files =
+      declare "Observer.set_compress_tracing_files" []
+        (dbg_p @-> bool_p @-> returning unit_p err)
+  end
 end
 
 module type MIRROR = sig
@@ -1509,6 +1585,51 @@ module type Server_impl = sig
       -> timeout:int option
       -> Dynamic.id list * string
   end
+
+  module Observer : sig
+    val create :
+         context
+      -> dbg:debug_info
+      -> uuid:string
+      -> name_label:string
+      -> attributes:(string * string) list
+      -> endpoints:string list
+      -> enabled:bool
+      -> unit
+
+    val destroy : context -> dbg:debug_info -> uuid:string -> unit
+
+    val set_enabled :
+      context -> dbg:debug_info -> uuid:string -> enabled:bool -> unit
+
+    val set_attributes :
+         context
+      -> dbg:debug_info
+      -> uuid:string
+      -> attributes:(string * string) list
+      -> unit
+
+    val set_endpoints :
+      context -> dbg:debug_info -> uuid:string -> endpoints:string list -> unit
+
+    val init : context -> dbg:debug_info -> unit
+
+    val set_trace_log_dir : context -> dbg:debug_info -> dir:string -> unit
+
+    val set_export_interval :
+      context -> dbg:debug_info -> interval:float -> unit
+
+    val set_max_spans : context -> dbg:debug_info -> spans:int -> unit
+
+    val set_max_traces : context -> dbg:debug_info -> traces:int -> unit
+
+    val set_max_file_size : context -> dbg:debug_info -> file_size:int -> unit
+
+    val set_host_id : context -> dbg:debug_info -> host_id:string -> unit
+
+    val set_compress_tracing_files :
+      context -> dbg:debug_info -> enabled:bool -> unit
+  end
 end
 
 module Server (Impl : Server_impl) () = struct
@@ -1690,6 +1811,42 @@ module Server (Impl : Server_impl) () = struct
     S.TASK.list (fun dbg -> Impl.TASK.list () ~dbg) ;
     S.UPDATES.get (fun dbg from timeout ->
         Impl.UPDATES.get () ~dbg ~from ~timeout
+    ) ;
+    S.Observer.create (fun dbg uuid name_label attributes endpoints enabled ->
+        Impl.Observer.create () ~dbg ~uuid ~name_label ~attributes ~endpoints
+          ~enabled
+    ) ;
+    S.Observer.destroy (fun dbg uuid -> Impl.Observer.destroy () ~dbg ~uuid) ;
+    S.Observer.set_enabled (fun dbg uuid enabled ->
+        Impl.Observer.set_enabled () ~dbg ~uuid ~enabled
+    ) ;
+    S.Observer.set_attributes (fun dbg uuid attributes ->
+        Impl.Observer.set_attributes () ~dbg ~uuid ~attributes
+    ) ;
+    S.Observer.set_endpoints (fun dbg uuid endpoints ->
+        Impl.Observer.set_endpoints () ~dbg ~uuid ~endpoints
+    ) ;
+    S.Observer.init (fun dbg -> Impl.Observer.init () ~dbg) ;
+    S.Observer.set_trace_log_dir (fun dbg dir ->
+        Impl.Observer.set_trace_log_dir () ~dbg ~dir
+    ) ;
+    S.Observer.set_export_interval (fun dbg interval ->
+        Impl.Observer.set_export_interval () ~dbg ~interval
+    ) ;
+    S.Observer.set_max_spans (fun dbg spans ->
+        Impl.Observer.set_max_spans () ~dbg ~spans
+    ) ;
+    S.Observer.set_max_traces (fun dbg traces ->
+        Impl.Observer.set_max_traces () ~dbg ~traces
+    ) ;
+    S.Observer.set_max_file_size (fun dbg file_size ->
+        Impl.Observer.set_max_file_size () ~dbg ~file_size
+    ) ;
+    S.Observer.set_host_id (fun dbg host_id ->
+        Impl.Observer.set_host_id () ~dbg ~host_id
+    ) ;
+    S.Observer.set_compress_tracing_files (fun dbg enabled ->
+        Impl.Observer.set_compress_tracing_files () ~dbg ~enabled
     )
 
   (* Bind all *)
