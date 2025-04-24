@@ -52,6 +52,8 @@
     xapi-rrd
     clock
     xapi-storage
+    xapi-tracing
+    xapi-tracing-export
   )
   (preprocess (pps ppx_sexp_conv))
 )
