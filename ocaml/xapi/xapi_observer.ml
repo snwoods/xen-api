@@ -227,6 +227,17 @@ module Xapi_storage_script = struct
   module Observer = struct
     let create ~__context ~uuid ~name_label ~attributes ~endpoints ~enabled =
       debug "Observer.create %s" uuid ;
+      List.iter (fun (sm_ref, sm_rec) ->
+        (
+          let sm_name = sm_rec.API.sM_name_label in
+          let sm_type = sm_rec.API.sM_type in
+          let sm_version = sm_rec.API.sM_version in
+          let sm_req_api_version = sm_rec.API.sM_required_api_version in
+          let sm_driver_name = sm_rec.API.sM_driver_filename in
+          debug "sm_ref=%s, sm_rec (name=%s type=%s version=%s api_version=%s driver=%s)"
+            (Ref.string_of sm_ref) sm_name sm_type sm_version sm_req_api_version sm_driver_name
+        ))
+        (Db.SM.get_all_records ~__context) ;
       let dbg = Context.string_of_task __context in
       ObserverClient.Observer.create dbg uuid name_label attributes endpoints
         enabled
