@@ -194,17 +194,20 @@ module TASK = struct
   let list ctx ~dbg = u "TASK.list"
 end
 
+module D = Debug.Make (struct let name = "storage_skeleton" end)
+
 module Observer = struct
   let create ctx ~dbg ~uuid ~name_label ~attributes ~endpoints ~enabled =
+    D.info "skeleton actual Observer.create" ;
     ()
 
-  let destroy ctx ~dbg ~uuid = ()
+  let destroy ctx ~dbg ~uuid = D.info "skeleton actual Observer.destroy" ; ()
 
-  let set_enabled ctx ~dbg ~uuid ~enabled = ()
+  let set_enabled ctx ~dbg ~uuid ~enabled = D.info "skeleton actual Observer.set_enabled" ; ()
 
   let set_attributes ctx ~dbg ~uuid ~attributes = ()
 
-  let set_endpoints ctx ~dbg ~uuid ~endpoints = ()
+  let set_endpoints ctx ~dbg ~uuid ~endpoints = D.info "skeleton actual Observer.set_endpoints" ; ()
 
   let init ctx ~dbg = ()
 

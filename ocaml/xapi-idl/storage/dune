@@ -8,6 +8,7 @@
    rresult
    threads
    xapi-idl
+   xapi-log
  )
  (wrapped false)
  (preprocess (pps ppx_deriving_rpc)))
@@ -42,6 +43,7 @@
    xapi-idl
    xapi-idl.storage.interface
    clock
+   xapi-log
  )
  (wrapped false))
 
@@ -57,6 +59,7 @@
    xapi-idl
    xapi-idl.storage
    xapi-idl.storage.interface
+   xapi-log
  ))
 
 (test
@@ -68,6 +71,7 @@
    
    xapi-idl.storage.interface
    xapi-idl.storage.interface.types
+   xapi-log
  )
  (package xapi-idl)
  (deps storage_test.exe))

@@ -33,15 +33,20 @@ let to_string = function
 
 let of_string = function
   | str when String.equal str Constants.observer_component_xapi ->
+      D.info "Getting Xapi component of string" ;
       Xapi
   | str when String.equal str Constants.observer_component_xenopsd ->
+      D.info "Getting xenops component of string" ;
       Xenopsd
   | str when String.equal str Constants.observer_component_xapi_clusterd ->
+      D.info "Getting cluster component of string" ;
       Xapi_clusterd
   | str when String.equal str Constants.observer_component_smapi ->
+      D.info "Getting smapi component of string" ;
       SMApi
   | str when String.equal str Constants.observer_component_xapi_storage_script
     ->
+      D.info "Getting xapi_storage_script component of string" ;
       Xapi_storage_script
   | c ->
       raise (Unsupported_Component c)
@@ -67,18 +72,25 @@ let assert_valid_components components =
 let filter_out_exp_components components =
   let open Xapi_globs in
   let component_set = components |> List.map to_string |> StringSet.of_list in
-  StringSet.diff component_set !observer_experimental_components
+  let experimental_list = !observer_experimental_components |> StringSet.elements in
+  D.info "experimental components list=%s" (String.concat ", " experimental_list) ;
+  let component_list = StringSet.diff component_set !observer_experimental_components
   |> StringSet.elements
-  |> List.map of_string
+  in
+  D.info "filter_out_exp_components list=%s" (String.concat ", " component_list) ;
+  component_list |> List.map of_string
 
 let observed_components_of components =
-  ( match components with
+  let result = ( match components with
   | [] ->
       startup_components ()
   | components ->
       components
   )
-  |> filter_out_exp_components
+  |> filter_out_exp_components in
+  let component_list = result |> List.map to_string in
+  D.info "observed_components_of=%s" (String.concat ", " component_list) ;
+  result
 
 let is_component_enabled ~component =
   try

@@ -4026,7 +4026,7 @@ end
 
 module Observer = struct
   let create _ dbg uuid name_label attributes endpoints enabled =
-    debug "Observer.create : dbg=%s" dbg ;
+    debug "Xenops actual Observer.create : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () ->
         Tracing.TracerProvider.create ~uuid ~name_label ~attributes ~endpoints
@@ -4035,73 +4035,73 @@ module Observer = struct
       ()
 
   let destroy _ dbg uuid =
-    debug "Observer.destroy : dbg=%s" dbg ;
+    debug "Xenops actual Observer.destroy : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> Tracing.TracerProvider.destroy ~uuid)
       ()
 
   let set_enabled _ dbg uuid enabled =
-    debug "Observer.set_enabled : dbg=%s" dbg ;
+    debug "Xenops actual Observer.set_enabled : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> Tracing.TracerProvider.set ~uuid ~enabled ())
       ()
 
   let set_attributes _ dbg uuid attributes =
-    debug "Observer.set_attributes : dbg=%s" dbg ;
+    debug "Xenops actual Observer.set_attributes : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> Tracing.TracerProvider.set ~uuid ~attributes ())
       ()
 
   let set_endpoints _ dbg uuid endpoints =
-    debug "Observer.set_endpoint : dbg=%s" dbg ;
+    debug "Xenops actual Observer.set_endpoint : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> Tracing.TracerProvider.set ~uuid ~endpoints ())
       ()
 
   let init _ dbg =
-    debug "Observer.init : dbg=%s" dbg ;
+    debug "Xenops actual Observer.init : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> ignore @@ Tracing_export.main ())
       ()
 
   let set_trace_log_dir _ dbg dir =
-    debug "Observer.set_trace_log_dir : dbg=%s" dbg ;
+    debug "Xenops actual Observer.set_trace_log_dir : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> Tracing_export.Destination.File.set_trace_log_dir dir)
       ()
 
   let set_export_interval _ dbg interval =
-    debug "Observer.set_export_interval : dbg=%s" dbg ;
+    debug "Xenops actual Observer.set_export_interval : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> Tracing_export.set_export_interval interval)
       ()
 
   let set_max_spans _ dbg spans =
-    debug "Observer.set_max_spans : dbg=%s" dbg ;
+    debug "Xenops actual Observer.set_max_spans : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> Tracing.Spans.set_max_spans spans)
       ()
 
   let set_max_traces _ dbg traces =
-    debug "Observer.set_max_traces : dbg=%s" dbg ;
+    debug "Xenops actual Observer.set_max_traces : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> Tracing.Spans.set_max_traces traces)
       ()
 
   let set_max_file_size _ dbg file_size =
-    debug "Observer.set_max_file_size : dbg=%s" dbg ;
+    debug "Xenops actual Observer.set_max_file_size : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> Tracing_export.Destination.File.set_max_file_size file_size)
       ()
 
   let set_host_id _ dbg host_id =
-    debug "Observer.set_host_id : dbg=%s" dbg ;
+    debug "Xenops actual Observer.set_host_id : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () -> Tracing_export.set_host_id host_id)
       ()
 
   let set_compress_tracing_files _ dbg enabled =
-    debug "Observer.set_compress_tracing_files : dbg=%s" dbg ;
+    debug "Xenops actual Observer.set_compress_tracing_files : dbg=%s" dbg ;
     Debug.with_thread_associated dbg
       (fun () ->
         Tracing_export.Destination.File.set_compress_tracing_files enabled
