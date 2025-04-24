@@ -410,19 +410,6 @@ let observer_config_dir =
   in
   dir // component // "enabled"
 
-(** Determine if SM API observation is enabled from the
-    filesystem. Ordinarily, determining if a component is enabled
-    would consist of querying the 'components' field of an observer
-    from the xapi database. *)
-let observer_is_component_enabled () =
-  let is_enabled () =
-    let is_config_file path = Filename.check_suffix path ".observer.conf" in
-    let* files = Sys.readdir observer_config_dir in
-    Lwt.return (List.exists is_config_file files)
-  in
-  let* result = Deferred.try_with is_enabled in
-  Lwt.return (Option.value (Result.to_option result) ~default:false)
-
 (** Call the script named after the RPC method in the [script_dir]
     directory. The arguments (not the whole JSON-RPC call) are passed as JSON
     to its stdin, and stdout is returned. In case of a non-zero exit code,
@@ -1844,11 +1831,45 @@ module DATAImpl (M : META) = struct
   module MIRROR = struct end
 end
 
+module Observer = struct
+  let create _ _ _ _ _ _ enabled =
+    config.use_observer <- enabled ;
+    return () |> wrap
+
+  let destroy _ _ _ =
+    config.use_observer <- false ;
+    return () |> wrap
+
+  let set_enabled _ _ _ enabled =
+    config.use_observer <- enabled ;
+    return () |> wrap
+
+  let set_attributes _ _ _ _ = return () |> wrap
+
+  let set_endpoints _ _ _ _ = return () |> wrap
+
+  let init _ _ = return () |> wrap
+
+  let set_trace_log_dir _ _ _ = return () |> wrap
+
+  let set_export_interval _ _ _ = return () |> wrap
+
+  let set_max_spans _ _ _ = return () |> wrap
+
+  let set_max_traces _ _ _ = return () |> wrap
+
+  let set_max_file_size _ _ _ = return () |> wrap
+
+  let set_host_id _ _ _ = return () |> wrap
+
+  let set_compress_tracing_files _ _ _ = return () |> wrap
+end
+
 (* Bind the implementations *)
 let bind ~volume_script_dir =
   (* Each plugin has its own version, see the call to listen
      where `process` is partially applied. *)
-  let module S = Storage_interface.StorageAPI (Rpc_lwt.GenServer ()) in
+  let module S = Storage_interface.StorageAPIObserver (Rpc_lwt.GenServer ()) in
   let module RuntimeMeta = struct
     let volume_script_dir = volume_script_dir
 
@@ -1907,6 +1928,20 @@ let bind ~volume_script_dir =
   let module DATA = DATAImpl (RuntimeMeta) in
   S.DATA.get_nbd_server DATA.get_nbd_server_impl ;
   S.DATA.import_activate DATA.data_import_activate_impl ;
+
+  S.Observer.create (Observer.create ()) ;
+  S.Observer.destroy (Observer.destroy ()) ;
+  S.Observer.set_enabled (Observer.set_enabled ()) ;
+  S.Observer.set_attributes (Observer.set_attributes ()) ;
+  S.Observer.set_endpoints (Observer.set_endpoints ()) ;
+  S.Observer.init (Observer.init ()) ;
+  S.Observer.set_trace_log_dir (Observer.set_trace_log_dir ()) ;
+  S.Observer.set_export_interval (Observer.set_export_interval ()) ;
+  S.Observer.set_max_spans (Observer.set_max_spans ()) ;
+  S.Observer.set_max_traces (Observer.set_max_traces ()) ;
+  S.Observer.set_max_file_size (Observer.set_max_file_size ()) ;
+  S.Observer.set_host_id (Observer.set_host_id ()) ;
+  S.Observer.set_compress_tracing_files (Observer.set_compress_tracing_files ()) ;
 
   let u name _ = failwith ("Unimplemented: " ^ name) in
   S.get_by_name (u "get_by_name") ;
@@ -2056,7 +2091,7 @@ let self_test_plugin ~root_dir plugin =
     debug (fun m -> m "RPC: %s" r) >>= fun () ->
     Lwt.return (Jsonrpc.response_of_string r)
   in
-  let module Test = Storage_interface.StorageAPI (Rpc_lwt.GenClient ()) in
+  let module Test = Storage_interface.StorageAPIObserver (Rpc_lwt.GenClient ()) in
   let dbg = "debug" in
   Deferred.try_with (fun () ->
       let open Rpc_lwt.ErrM in
@@ -2223,8 +2258,6 @@ let () =
   Logs.set_reporter (lwt_reporter ()) ;
   Logs.set_level ~all:true (Some Logs.Info) ;
   let main =
-    let* observer_enabled = observer_is_component_enabled () in
-    config.use_observer <- observer_enabled ;
     if !self_test_only then
       self_test ~root_dir:!root_dir
     else

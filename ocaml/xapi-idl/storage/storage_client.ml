@@ -35,3 +35,15 @@ module Client = Storage_interface.StorageAPI (Idl.Exn.GenClient (struct
             Storage_interface.uri call
     )
 end))
+
+module ObserverClient =
+Storage_interface.StorageAPIObserver (Idl.Exn.GenClient (struct
+  let rpc call =
+    retry_econnrefused (fun () ->
+        if !use_switch then
+          json_switch_rpc !queue_name call
+        else
+          xml_http_rpc ~srcstr:(get_user_agent ()) ~dststr:"storage"
+            Storage_interface.uri call
+    )
+end))

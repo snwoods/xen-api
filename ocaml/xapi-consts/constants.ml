@@ -411,12 +411,15 @@ let observer_component_xapi_clusterd = "xapi-clusterd"
 
 let observer_component_smapi = "smapi"
 
+let observer_component_xapi_storage_script = "smapiv3"
+
 let observer_components_all =
   [
     observer_component_xapi
   ; observer_component_xenopsd
   ; observer_component_xapi_clusterd
   ; observer_component_smapi
+  ; observer_component_xapi_storage_script
   ]
 
 let tgroups_enabled = ref false

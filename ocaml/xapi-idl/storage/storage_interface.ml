@@ -1162,6 +1162,19 @@ module StorageAPI (R : RPC) = struct
   end
 end
 
+module StorageAPIObserver (R : RPC) = struct
+  include StorageAPI (R)
+
+  module Observer =
+    Observer_helpers.ObserverAPI
+      (R)
+      (struct
+        type comp_error = Errors.error
+
+        let err = err
+      end)
+end
+
 module type MIRROR = sig
   type context = unit
 
