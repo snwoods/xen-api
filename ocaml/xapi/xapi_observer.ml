@@ -228,68 +228,67 @@ module Xapi_storage_script = struct
     let create ~__context ~uuid ~name_label ~attributes ~endpoints ~enabled =
       debug "Observer.create %s" uuid ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.create dbg uuid name_label attributes endpoints
-        enabled
+      Client.Observer.create dbg uuid name_label attributes endpoints enabled
 
     let destroy ~__context ~uuid =
       debug "Observer.destroy %s" uuid ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.destroy dbg uuid
+      Client.Observer.destroy dbg uuid
 
     let set_enabled ~__context ~uuid ~enabled =
       debug "Observer.set_enabled %s" uuid ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.set_enabled dbg uuid enabled
+      Client.Observer.set_enabled dbg uuid enabled
 
     let set_attributes ~__context ~uuid ~attributes =
       debug "Observer.set_attributes %s" uuid ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.set_attributes dbg uuid attributes
+      Client.Observer.set_attributes dbg uuid attributes
 
     let set_endpoints ~__context ~uuid ~endpoints =
       debug "Observer.set_endpoints %s" uuid ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.set_endpoints dbg uuid endpoints
+      Client.Observer.set_endpoints dbg uuid endpoints
 
     let init ~__context =
       debug "Observer.init" ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.init dbg
+      Client.Observer.init dbg
 
     let set_trace_log_dir ~__context ~dir =
       debug "Observer.set_trace_log_dir" ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.set_trace_log_dir dbg dir
+      Client.Observer.set_trace_log_dir dbg dir
 
     let set_export_interval ~__context ~interval =
       debug "Observer.set_export_interval" ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.set_export_interval dbg interval
+      Client.Observer.set_export_interval dbg interval
 
     let set_max_spans ~__context ~spans =
       debug "Observer.set_max_spans" ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.set_max_spans dbg spans
+      Client.Observer.set_max_spans dbg spans
 
     let set_max_traces ~__context ~traces =
       debug "Observer.set_max_traces" ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.set_max_traces dbg traces
+      Client.Observer.set_max_traces dbg traces
 
     let set_max_file_size ~__context ~file_size =
       debug "Observer.set_max_file_size" ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.set_max_file_size dbg file_size
+      Client.Observer.set_max_file_size dbg file_size
 
     let set_host_id ~__context ~host_id =
       debug "Observer.set_host_id" ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.set_host_id dbg host_id
+      Client.Observer.set_host_id dbg host_id
 
     let set_compress_tracing_files ~__context ~enabled =
       debug "Observer.set_compress_tracing_files" ;
       let dbg = Context.string_of_task __context in
-      ObserverClient.Observer.set_compress_tracing_files dbg enabled
+      Client.Observer.set_compress_tracing_files dbg enabled
   end
 end
 

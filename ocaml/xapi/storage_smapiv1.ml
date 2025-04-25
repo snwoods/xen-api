@@ -1256,4 +1256,6 @@ module SMAPIv1 : Server_impl = struct
   module UPDATES = struct
     let get _context ~dbg:_ ~from:_ ~timeout:_ = assert false
   end
+
+  module Observer = Storage_skeleton.Observer
 end

@@ -1474,6 +1474,8 @@ functor
         let _, ids, next = Updates.get dbg from timeout updates in
         (ids, string_of_int next)
     end
+
+    module Observer = Storage_skeleton.Observer
   end
 
 let initialise () =

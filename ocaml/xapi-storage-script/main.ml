@@ -1869,7 +1869,7 @@ end
 let bind ~volume_script_dir =
   (* Each plugin has its own version, see the call to listen
      where `process` is partially applied. *)
-  let module S = Storage_interface.StorageAPIObserver (Rpc_lwt.GenServer ()) in
+  let module S = Storage_interface.StorageAPI (Rpc_lwt.GenServer ()) in
   let module RuntimeMeta = struct
     let volume_script_dir = volume_script_dir
 
@@ -2091,7 +2091,7 @@ let self_test_plugin ~root_dir plugin =
     debug (fun m -> m "RPC: %s" r) >>= fun () ->
     Lwt.return (Jsonrpc.response_of_string r)
   in
-  let module Test = Storage_interface.StorageAPIObserver (Rpc_lwt.GenClient ()) in
+  let module Test = Storage_interface.StorageAPI (Rpc_lwt.GenClient ()) in
   let dbg = "debug" in
   Deferred.try_with (fun () ->
       let open Rpc_lwt.ErrM in
