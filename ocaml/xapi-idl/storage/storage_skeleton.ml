@@ -196,30 +196,30 @@ end
 
 module Observer = struct
   let create ctx ~dbg ~uuid ~name_label ~attributes ~endpoints ~enabled =
-    u "Observer.create"
+    ()
 
-  let destroy ctx ~dbg ~uuid = u "Observer.destroy"
+  let destroy ctx ~dbg ~uuid = ()
 
-  let set_enabled ctx ~dbg ~uuid ~enabled = u "Observer.set_enabled"
+  let set_enabled ctx ~dbg ~uuid ~enabled = ()
 
-  let set_attributes ctx ~dbg ~uuid ~attributes = u "Observer.set_attributes"
+  let set_attributes ctx ~dbg ~uuid ~attributes = ()
 
-  let set_endpoints ctx ~dbg ~uuid ~endpoints = u "Observer.set_endpoints"
+  let set_endpoints ctx ~dbg ~uuid ~endpoints = ()
 
-  let init ctx ~dbg = u "Observer.init"
+  let init ctx ~dbg = ()
 
-  let set_trace_log_dir ctx ~dbg ~dir = u "Observer.set_trace_log_dir"
+  let set_trace_log_dir ctx ~dbg ~dir = ()
 
-  let set_export_interval ctx ~dbg ~interval = u "Observer.set_export_interval"
+  let set_export_interval ctx ~dbg ~interval = ()
 
-  let set_max_spans ctx ~dbg ~spans = u "Observer.set_max_spans"
+  let set_max_spans ctx ~dbg ~spans = ()
 
-  let set_max_traces ctx ~dbg ~traces = u "Observer.set_max_traces"
+  let set_max_traces ctx ~dbg ~traces = ()
 
-  let set_max_file_size ctx ~dbg ~file_size = u "Observer.set_max_file_size"
+  let set_max_file_size ctx ~dbg ~file_size = ()
 
-  let set_host_id ctx ~dbg ~host_id = u "Observer.set_host_id"
+  let set_host_id ctx ~dbg ~host_id = ()
 
   let set_compress_tracing_files ctx ~dbg ~enabled =
-    u "Observer.set_compress_tracing_files"
+    ()
 end
