@@ -817,6 +817,7 @@ module Mux = struct
 
   module TASK = Storage_smapiv1_wrapper.Impl.TASK
   module UPDATES = Storage_smapiv1_wrapper.Impl.UPDATES
+  module Observer = Storage_smapiv1_wrapper.Impl.Observer
 end
 
 module Server = Storage_interface.Server (Mux) ()
