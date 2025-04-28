@@ -1639,11 +1639,12 @@ let rec atomics_of_operation = function
           ]
       ; [VM_create_device_model (id, false)]
         (* PCI and USB devices are hot-plugged into HVM guests via QEMU, so the
-           following operations occur after creating the device models.
-           The order of PCI devices depends on the order they are plugged, they
-           must be kept serialized. *)
-      ; List.map (fun pci -> PCI_plug (pci.Pci.id, true)) pcis_other
-      ; List.map (fun vusb -> VUSB_plug vusb.Vusb.id) vusbs
+           following operations occur after creating the device models *)
+      ; parallel_concat "Devices.plug (qemu)" ~id
+          [
+            List.map (fun pci -> PCI_plug (pci.Pci.id, true)) pcis_other
+          ; List.map (fun vusb -> VUSB_plug vusb.Vusb.id) vusbs
+          ]
         (* At this point the domain is considered survivable. *)
       ; [VM_set_domain_action_request (id, None)]
       ]
@@ -1706,10 +1707,10 @@ let rec atomics_of_operation = function
         )
       ; [VM_create_device_model (id, true)]
         (* PCI and USB devices are hot-plugged into HVM guests via QEMU, so
-           the following operations occur after creating the device models.
-           The order of PCI devices depends on the order they are plugged, they
-           must be kept serialized. *)
-      ; List.map (fun pci -> PCI_plug (pci.Pci.id, true)) pcis_other
+           the following operations occur after creating the device models *)
+      ; parallel_map "PCIs.plug" ~id pcis_other (fun pci ->
+            [PCI_plug (pci.Pci.id, true)]
+        )
       ]
       |> List.concat
   | VM_poweroff (id, timeout) ->
