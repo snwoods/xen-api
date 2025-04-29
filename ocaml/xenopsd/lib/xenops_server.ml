@@ -1228,6 +1228,8 @@ module WorkerPool = struct
         |> List.length
     )
 
+  let get_pool_length queues = List.length queues
+
   let find_one queues f =
     List.fold_left
       (fun acc x -> acc || (x.Worker.redirector == queues && f x))
@@ -2373,6 +2375,22 @@ and queue_atomic_int ~progress_callback dbg id op =
   task
 
 and queue_atomics_and_wait ~progress_callback ~max_parallel_atoms dbg id ops =
+  info "1830: Entered queue_atomics_and_wait" ;
+  info
+    "1830: Worker status before queueing: [%s] (thread_id: %d)"
+    (String.concat ", " (List.map
+      (fun w ->
+        let thread_id = Option.fold ~none:"None" ~some:(fun thread -> string_of_int (Thread.id thread)) w.Worker.t in
+        let redirector =
+          if w.Worker.redirector == Redirector.parallel_queues then
+            "Parallel"
+          else
+            "Default"
+        in
+        Printf.sprintf "(%s, %s)" thread_id redirector
+      )
+    !WorkerPool.pool))
+    (Thread.id (Thread.self ())) ;
   let from = Updates.last_id dbg updates in
   Xenops_utils.chunks max_parallel_atoms ops
   |> List.mapi (fun chunk_idx ops ->
@@ -2394,10 +2412,34 @@ and queue_atomics_and_wait ~progress_callback ~max_parallel_atoms dbg id ops =
            (fun (task, op) ->
              let task_id = Xenops_task.id_of_handle task in
              let expiration = atomic_expires_after op in
+             info "atomic_expires_after = %f" expiration ;
              let completion =
                event_wait updates task ~from ~timeout_start expiration
                  (is_task task_id) task_ended
              in
+             info "1830: event_wait completed" ;
+             ( match completion with
+             | None ->
+                 info
+                   "1830: Xenopsd task timed out: (workers: [%s] (id: %s, thread_id: %d)"
+                    (String.concat ", " (List.map
+                      (fun w ->
+                        let thread_id = Option.fold ~none:"None" ~some:(fun thread -> string_of_int (Thread.id thread)) w.Worker.t in
+                        let redirector =
+                          if w.Worker.redirector == Redirector.parallel_queues then
+                            "Parallel"
+                          else
+                            "Default"
+                        in
+                        Printf.sprintf "(%s, %s)" thread_id redirector
+                      )
+                    !WorkerPool.pool))
+                   (Xenops_task.id_of_handle task)
+                   (Thread.id (Thread.self ()))
+             | _ ->
+                 info "1830: Xenopsd task completed before time out" ;
+                 ()
+             ) ;
              (task_id, task, completion)
            )
            task_list
