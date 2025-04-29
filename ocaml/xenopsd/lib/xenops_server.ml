@@ -168,6 +168,7 @@ type atomic =
   | VM_rename of (Vm.id * Vm.id * rename_when)
   | VM_import_metadata of (Vm.id * Metadata.t)
   | Parallel of Vm.id * string * atomic list
+  | Nested_parallel of Vm.id * string * atomic list
   | Serial of Vm.id * string * atomic list
   | Best_effort of atomic
 [@@deriving rpcty]
@@ -286,6 +287,9 @@ let rec name_of_atomic = function
   | Parallel (_, _, atomics) ->
       Printf.sprintf "Parallel (%s)"
         (String.concat " | " (List.map name_of_atomic atomics))
+  | Nested_parallel (_, _, atomics) ->
+      Printf.sprintf "Nested_parallel (%s)"
+        (String.concat " | " (List.map name_of_atomic atomics))
   | Serial (_, _, atomics) ->
       Printf.sprintf "Serial (%s)"
         (String.concat " & " (List.map name_of_atomic atomics))
@@ -295,7 +299,7 @@ let rec name_of_atomic = function
 let rec atomic_expires_after = function
   | Serial (_, _, ops) ->
       List.map atomic_expires_after ops |> List.fold_left ( +. ) 0.
-  | Parallel (_, _, ops) ->
+  | Parallel (_, _, ops) | Nested_parallel (_, _, ops) ->
       List.map atomic_expires_after ops |> List.fold_left Float.max 0.
   | _ ->
       (* 20 minutes, in seconds *)
@@ -915,6 +919,9 @@ module Redirector = struct
      Parallel atoms, creating a deadlock. *)
   let parallel_queues = {queues= Queues.create (); mutex= Mutex.create ()}
 
+  let nested_parallel_queues =
+    {queues= Queues.create (); mutex= Mutex.create ()}
+
   (* When a thread is actively processing a queue, items are redirected to a
      thread-private queue *)
   let overrides = ref StringMap.empty
@@ -1034,6 +1041,7 @@ module Redirector = struct
           List.concat_map one
             (default.queues
             :: parallel_queues.queues
+            :: nested_parallel_queues.queues
             :: List.map snd (StringMap.bindings !overrides)
             )
       )
@@ -1267,7 +1275,8 @@ module WorkerPool = struct
   let start size =
     for _i = 1 to size do
       incr Redirector.default ;
-      incr Redirector.parallel_queues
+      incr Redirector.parallel_queues ;
+      incr Redirector.nested_parallel_queues
     done
 
   let set_size size =
@@ -1282,7 +1291,8 @@ module WorkerPool = struct
       done
     in
     inner Redirector.default ;
-    inner Redirector.parallel_queues
+    inner Redirector.parallel_queues ;
+    inner Redirector.nested_parallel_queues
 end
 
 (* Keep track of which VMs we're rebooting so we avoid transient glitches where
@@ -1583,6 +1593,11 @@ let collect_into apply = function [] -> [] | [op] -> [op] | lst -> apply lst
 let parallel name ~id =
   collect_into (fun ls -> [Parallel (id, Printf.sprintf "%s VM=%s" name id, ls)])
 
+let nested_parallel name ~id =
+  collect_into (fun ls ->
+      [Nested_parallel (id, Printf.sprintf "%s VM=%s" name id, ls)]
+  )
+
 let serial name ~id =
   collect_into (fun ls -> [Serial (id, Printf.sprintf "%s VM=%s" name id, ls)])
 
@@ -1591,6 +1606,9 @@ let parallel_concat name ~id lst = parallel name ~id (List.concat lst)
 let serial_concat name ~id lst = serial name ~id (List.concat lst)
 
 let parallel_map name ~id lst f = parallel name ~id (List.concat_map f lst)
+
+let nested_parallel_map name ~id lst f =
+  nested_parallel name ~id (List.concat_map f lst)
 
 let map_or_empty f x = Option.value ~default:[] (Option.map f x)
 
@@ -1629,7 +1647,7 @@ let rec atomics_of_operation = function
         let pf = Printf.sprintf in
         let name_multi = pf "VBDs.activate_epoch_and_plug %s" typ in
         let name_one = pf "VBD.activate_epoch_and_plug %s" typ in
-        parallel_map name_multi ~id vbds (fun vbd ->
+        nested_parallel_map name_multi ~id vbds (fun vbd ->
             serial_concat name_one ~id
               [
                 [VBD_set_active (vbd.Vbd.id, true)]
@@ -1663,11 +1681,11 @@ let rec atomics_of_operation = function
               vifs
           ; serial_concat "VGPUs.activate & PCI.plug (SRIOV)" ~id
               [
-                parallel_map "VGPUs.activate" ~id vgpus (fun vgpu ->
+                nested_parallel_map "VGPUs.activate" ~id vgpus (fun vgpu ->
                     [VGPU_set_active (vgpu.Vgpu.id, true)]
                 )
-              ; parallel_map "PCIs.plug (SRIOV)" ~id pcis_sriov (fun pci ->
-                    [PCI_plug (pci.Pci.id, false)]
+              ; nested_parallel_map "PCIs.plug (SRIOV)" ~id pcis_sriov
+                  (fun pci -> [PCI_plug (pci.Pci.id, false)]
                 )
               ]
           ]
@@ -1869,6 +1887,15 @@ let rec atomics_of_operation = function
   | _ ->
       []
 
+let redirector_as_string r =
+  match r with
+  | w when w = Redirector.parallel_queues ->
+      "Parallel"
+  | w when w = Redirector.nested_parallel_queues ->
+      "Nested_parallel"
+  | _ ->
+      "Default"
+
 let rec perform_atomic ~progress_callback ?result (op : atomic)
     (t : Xenops_task.task_handle) : unit =
   let module B = (val get_backend () : S) in
@@ -1882,56 +1909,9 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
         (Printexc.to_string e)
   )
   | Parallel (_id, description, atoms) ->
-      (* parallel_id is a unused unique name prefix for a parallel worker queue *)
-      let parallel_id =
-        Printf.sprintf "Parallel:task=%s.atoms=%d.(%s)"
-          (Xenops_task.id_of_handle t)
-          (List.length atoms) description
-      in
-      let with_tracing = id_with_tracing parallel_id t in
-      debug "begin_%s" parallel_id ;
-      let task_list =
-        queue_atomics_and_wait ~progress_callback ~max_parallel_atoms:10
-          with_tracing parallel_id atoms
-      in
-      debug "end_%s" parallel_id ;
-      (* make sure that we destroy all the parallel tasks that finished *)
-      let errors =
-        List.map
-          (fun (id, task_handle, task_state) ->
-            match task_state with
-            | Some (Task.Completed _) ->
-                TASK.destroy' id ; None
-            | Some (Task.Failed e) ->
-                TASK.destroy' id ;
-                let e =
-                  match Rpcmarshal.unmarshal Errors.error.Rpc.Types.ty e with
-                  | Ok x ->
-                      Xenopsd_error x
-                  | Error (`Msg x) ->
-                      internal_error "Error unmarshalling failure: %s" x
-                in
-                Some e
-            | None | Some (Task.Pending _) ->
-                (* Because pending tasks are filtered out in
-                   queue_atomics_and_wait with task_ended the second case will
-                   never be encountered. The previous boolean used in
-                   event_wait was enough to express the possible cases *)
-                let err_msg =
-                  Printf.sprintf "Timed out while waiting on task %s (%s)" id
-                    (Xenops_task.get_dbg task_handle)
-                in
-                error "%s" err_msg ;
-                Xenops_task.cancel task_handle ;
-                Some (Xenopsd_error (Internal_error err_msg))
-          )
-          task_list
-      in
-      (* if any error was present, raise first one, so that
-         trigger_cleanup_after_failure is called *)
-      List.iter
-        (fun err -> match err with None -> () | Some e -> raise e)
-        errors
+      parallel_atomic ~progress_callback ~description ~nested:false atoms t
+  | Nested_parallel (_id, description, atoms) ->
+      parallel_atomic ~progress_callback ~description ~nested:true atoms t
   | Serial (_, _, atoms) ->
       List.iter (Fun.flip (perform_atomic ~progress_callback) t) atoms
   | VIF_plug id ->
@@ -2360,7 +2340,64 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       debug "VM.soft_reset %s" id ;
       B.VM.soft_reset t (VM_DB.read_exn id)
 
-and queue_atomic_int ~progress_callback dbg id op =
+and parallel_atomic ~progress_callback ~description ~nested atoms t =
+  (* parallel_id is a unused unique name prefix for a parallel worker queue *)
+  let redirector =
+    if nested then
+      Redirector.nested_parallel_queues
+    else
+      Redirector.parallel_queues
+  in
+  let parallel_id =
+    Printf.sprintf "%s:task=%s.atoms=%d.(%s)"
+      (redirector_as_string redirector)
+      (Xenops_task.id_of_handle t)
+      (List.length atoms) description
+  in
+  let with_tracing = id_with_tracing parallel_id t in
+  debug "begin_%s" parallel_id ;
+  let task_list =
+    queue_atomics_and_wait ~progress_callback ~max_parallel_atoms:10
+      with_tracing parallel_id atoms redirector
+  in
+  debug "end_%s" parallel_id ;
+  (* make sure that we destroy all the parallel tasks that finished *)
+  let errors =
+    List.map
+      (fun (id, task_handle, task_state) ->
+        match task_state with
+        | Some (Task.Completed _) ->
+            TASK.destroy' id ; None
+        | Some (Task.Failed e) ->
+            TASK.destroy' id ;
+            let e =
+              match Rpcmarshal.unmarshal Errors.error.Rpc.Types.ty e with
+              | Ok x ->
+                  Xenopsd_error x
+              | Error (`Msg x) ->
+                  internal_error "Error unmarshalling failure: %s" x
+            in
+            Some e
+        | None | Some (Task.Pending _) ->
+            (* Because pending tasks are filtered out in
+                queue_atomics_and_wait with task_ended the second case will
+                never be encountered. The previous boolean used in
+                event_wait was enough to express the possible cases *)
+            let err_msg =
+              Printf.sprintf "Timed out while waiting on task %s (%s)" id
+                (Xenops_task.get_dbg task_handle)
+            in
+            error "%s" err_msg ;
+            Xenops_task.cancel task_handle ;
+            Some (Xenopsd_error (Internal_error err_msg))
+      )
+      task_list
+  in
+  (* if any error was present, raise first one, so that
+      trigger_cleanup_after_failure is called *)
+  List.iter (fun err -> match err with None -> () | Some e -> raise e) errors
+
+and queue_atomic_int ~progress_callback dbg id op redirector =
   let task =
     Xenops_task.add tasks dbg
       (let r = ref None in
@@ -2369,10 +2406,12 @@ and queue_atomic_int ~progress_callback dbg id op =
          !r
       )
   in
-  Redirector.push Redirector.parallel_queues id (Atomic op, task) ;
+  debug "Adding to %s queues" (redirector_as_string redirector) ;
+  Redirector.push redirector id (Atomic op, task) ;
   task
 
-and queue_atomics_and_wait ~progress_callback ~max_parallel_atoms dbg id ops =
+and queue_atomics_and_wait ~progress_callback ~max_parallel_atoms dbg id ops
+    redirector =
   let from = Updates.last_id dbg updates in
   Xenops_utils.chunks max_parallel_atoms ops
   |> List.mapi (fun chunk_idx ops ->
@@ -2385,7 +2424,9 @@ and queue_atomics_and_wait ~progress_callback ~max_parallel_atoms dbg id ops =
                let atom_id =
                  Printf.sprintf "%s.chunk=%d.atom=%d" id chunk_idx atom_idx
                in
-               (queue_atomic_int ~progress_callback dbg atom_id op, op)
+               ( queue_atomic_int ~progress_callback dbg atom_id op redirector
+               , op
+               )
              )
              ops
          in
@@ -2561,7 +2602,9 @@ and trigger_cleanup_after_failure_atom op t =
       immediate_operation dbg id (VM_check_state id)
   | Best_effort op ->
       trigger_cleanup_after_failure_atom op t
-  | Parallel (_id, _description, ops) | Serial (_id, _description, ops) ->
+  | Parallel (_id, _description, ops)
+  | Nested_parallel (_id, _description, ops)
+  | Serial (_id, _description, ops) ->
       List.iter (fun op -> trigger_cleanup_after_failure_atom op t) ops
   | VM_rename (id1, id2, _) ->
       immediate_operation dbg id1 (VM_check_state id1) ;
