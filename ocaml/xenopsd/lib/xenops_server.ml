@@ -3705,6 +3705,7 @@ module VM = struct
       Printf.sprintf "%s00000000000%c" (String.sub uuid 0 24)
         (match kind with `dest -> '1' | `src -> '0')
     in
+    debug "1830: queueing vm migrate" ;
     queue_operation dbg id
       (VM_migrate
          {
@@ -3766,10 +3767,8 @@ module VM = struct
                 ; vmr_compressed= compressed_memory
                 }
             in
-            let task = Some (queue_operation ?traceparent dbg id op) in
-            Option.iter
-              (fun t -> t |> Xenops_client.wait_for_task dbg |> ignore)
-              task
+            debug "1830: Doing receive_memory operation immediately" ;
+            immediate_operation dbg id op
         | None ->
             Response.write (fun _ -> ()) not_found_response s
       )
