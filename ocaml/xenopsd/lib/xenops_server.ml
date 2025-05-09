@@ -1235,6 +1235,16 @@ module WorkerPool = struct
       (fun acc x -> acc || (x.Worker.redirector == queues && f x))
       false
 
+  let get_worker_by_thread_id thread_id =
+    List.find_opt
+      (fun x -> (
+        Option.fold ~none:false ~some:(fun t ->
+          Thread.id t = thread_id
+        ) x.Worker.t
+        )
+      )
+      !pool
+
   (* Clean up any shutdown threads and remove them from the master list *)
   let gc queues pool =
     List.fold_left
@@ -1891,12 +1901,33 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
           (List.length atoms) description
       in
       let with_tracing = id_with_tracing parallel_id t in
+      let thread_id = (Thread.id (Thread.self ())) in
+      let worker = WorkerPool.get_worker_by_thread_id thread_id in
+      let nested_parallel = Option.fold ~none:false ~some:(fun w -> w.Worker.redirector == Redirector.parallel_queues) worker in
+      let redirector = Option.fold ~none:"None" ~some:(fun w -> if w.Worker.redirector == Redirector.parallel_queues then "Parallel" else "Default") worker in
+      debug "thread_id=%d, redirector=%s, nested_parallel=%b" thread_id redirector nested_parallel ;
+      if nested_parallel then (
+        debug "Current active parallel=%d" (WorkerPool.count_active Redirector.parallel_queues) ;
+        WorkerPool.incr Redirector.parallel_queues ;
+        debug "Incremented workers due to nested parallel, workers: default=%d parallel=%d total=%d"
+          (WorkerPool.count_active Redirector.default)
+          (WorkerPool.count_active Redirector.parallel_queues)
+          (WorkerPool.get_pool_length !WorkerPool.pool)
+      ) ;
       debug "begin_%s" parallel_id ;
       let task_list =
         queue_atomics_and_wait ~progress_callback ~max_parallel_atoms:10
           with_tracing parallel_id atoms
       in
       debug "end_%s" parallel_id ;
+      if nested_parallel then (
+        debug "Current active parallel=%d" (WorkerPool.count_active Redirector.parallel_queues) ;
+        WorkerPool.decr Redirector.default ;
+        debug "Decremented workers after nested parallel, workers: default=%d parallel=%d total=%d"
+          (WorkerPool.count_active Redirector.default)
+          (WorkerPool.count_active Redirector.parallel_queues)
+          (WorkerPool.get_pool_length !WorkerPool.pool)
+      ) ;
       (* make sure that we destroy all the parallel tasks that finished *)
       let errors =
         List.map
