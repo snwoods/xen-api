@@ -915,6 +915,12 @@ module Redirector = struct
      Parallel atoms, creating a deadlock. *)
   let parallel_queues = {queues= Queues.create (); mutex= Mutex.create ()}
 
+  (* Create another queue only for Migration atoms for the same reason as Parallel atoms.
+     Migration spawns 2 separate atoms, so if there is limited available worker space
+     a deadlock can happen when VMs are migrating between hosts or on localhost migration
+     as the receiver has no free workers to receive memory. *)
+  let migration_queues = {queues= Queues.create (); mutex= Mutex.create ()}
+
   (* When a thread is actively processing a queue, items are redirected to a
      thread-private queue *)
   let overrides = ref StringMap.empty
@@ -1034,6 +1040,7 @@ module Redirector = struct
           List.concat_map one
             (default.queues
             :: parallel_queues.queues
+            :: migration_queues.queues
             :: List.map snd (StringMap.bindings !overrides)
             )
       )
@@ -1269,7 +1276,8 @@ module WorkerPool = struct
   let start size =
     for _i = 1 to size do
       incr Redirector.default ;
-      incr Redirector.parallel_queues
+      incr Redirector.parallel_queues ;
+      incr Redirector.migration_queues
     done
 
   let set_size size =
@@ -1284,7 +1292,8 @@ module WorkerPool = struct
       done
     in
     inner Redirector.default ;
-    inner Redirector.parallel_queues
+    inner Redirector.parallel_queues ;
+    inner Redirector.migration_queues
 end
 
 (* Keep track of which VMs we're rebooting so we avoid transient glitches where
@@ -2382,10 +2391,10 @@ and queue_atomics_and_wait ~progress_callback ~max_parallel_atoms dbg id ops =
       (fun w ->
         let thread_id = Option.fold ~none:"None" ~some:(fun thread -> string_of_int (Thread.id thread)) w.Worker.t in
         let redirector =
-          if w.Worker.redirector == Redirector.parallel_queues then
-            "Parallel"
-          else
-            "Default"
+          match w.Worker.redirector with
+          | r when r == Redirector.parallel_queues -> "Parallel"
+          | r when r == Redirector.migration_queues -> "Migration"
+          | _ -> "Default"
         in
         Printf.sprintf "(%s, %s)" thread_id redirector
       )
@@ -2426,10 +2435,10 @@ and queue_atomics_and_wait ~progress_callback ~max_parallel_atoms dbg id ops =
                       (fun w ->
                         let thread_id = Option.fold ~none:"None" ~some:(fun thread -> string_of_int (Thread.id thread)) w.Worker.t in
                         let redirector =
-                          if w.Worker.redirector == Redirector.parallel_queues then
-                            "Parallel"
-                          else
-                            "Default"
+                          match w.Worker.redirector with
+                          | r when r == Redirector.parallel_queues -> "Parallel"
+                          | r when r == Redirector.migration_queues -> "Migration"
+                          | _ -> "Default"
                         in
                         Printf.sprintf "(%s, %s)" thread_id redirector
                       )
@@ -3306,7 +3315,7 @@ let uses_mxgpu id =
     )
     (VGPU_DB.ids id)
 
-let queue_operation_int ?traceparent dbg id op =
+let queue_operation_int ?traceparent dbg id op redirector =
   let task =
     Xenops_task.add ?traceparent tasks dbg
       (let r = ref None in
@@ -3314,16 +3323,16 @@ let queue_operation_int ?traceparent dbg id op =
       )
   in
   let tag = if uses_mxgpu id then "mxgpu" else id in
-  Redirector.push Redirector.default tag (op, task) ;
+  Redirector.push redirector tag (op, task) ;
   task
 
-let queue_operation ?traceparent dbg id op =
-  let task = queue_operation_int ?traceparent dbg id op in
+let queue_operation ?traceparent ?(redirector = Redirector.default) dbg id op =
+  let task = queue_operation_int ?traceparent dbg id op redirector in
   Xenops_task.id_of_handle task
 
 let queue_operation_and_wait dbg id op =
   let from = Updates.last_id dbg updates in
-  let task = queue_operation_int dbg id op in
+  let task = queue_operation_int dbg id op Redirector.default in
   let task_id = Xenops_task.id_of_handle task in
   event_wait updates task ~from 1200.0 (is_task task_id) task_ended |> ignore ;
   task
@@ -3705,6 +3714,7 @@ module VM = struct
       Printf.sprintf "%s00000000000%c" (String.sub uuid 0 24)
         (match kind with `dest -> '1' | `src -> '0')
     in
+    debug "1830: queueing vm migrate on migration queue" ;
     queue_operation dbg id
       (VM_migrate
          {
@@ -3719,6 +3729,7 @@ module VM = struct
          ; vmm_verify_dest= verify_dest
          }
       )
+      ~redirector:Redirector.migration_queues
 
   let migrate_receive_memory _ _ _ _ _ _ = failwith "Unimplemented"
 
@@ -3766,7 +3777,8 @@ module VM = struct
                 ; vmr_compressed= compressed_memory
                 }
             in
-            let task = Some (queue_operation ?traceparent dbg id op) in
+            debug "1830: queueing receive_memory on migration queue" ;
+            let task = Some (queue_operation ?traceparent dbg id op ~redirector:Redirector.migration_queues) in
             Option.iter
               (fun t -> t |> Xenops_client.wait_for_task dbg |> ignore)
               task
