@@ -1869,6 +1869,13 @@ let rec atomics_of_operation = function
   | _ ->
       []
 
+let redirector_as_string r =
+  match r with
+  | w when w = Redirector.parallel_queues ->
+      "Parallel"
+  | _ ->
+      "Default"
+
 let rec perform_atomic ~progress_callback ?result (op : atomic)
     (t : Xenops_task.task_handle) : unit =
   let module B = (val get_backend () : S) in
@@ -1892,7 +1899,7 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       debug "begin_%s" parallel_id ;
       let task_list =
         queue_atomics_and_wait ~progress_callback ~max_parallel_atoms:10
-          with_tracing parallel_id atoms
+          with_tracing parallel_id atoms Redirector.parallel_queues
       in
       debug "end_%s" parallel_id ;
       (* make sure that we destroy all the parallel tasks that finished *)
@@ -2360,7 +2367,7 @@ let rec perform_atomic ~progress_callback ?result (op : atomic)
       debug "VM.soft_reset %s" id ;
       B.VM.soft_reset t (VM_DB.read_exn id)
 
-and queue_atomic_int ~progress_callback dbg id op =
+and queue_atomic_int ~progress_callback dbg id op redirector =
   let task =
     Xenops_task.add tasks dbg
       (let r = ref None in
@@ -2369,10 +2376,12 @@ and queue_atomic_int ~progress_callback dbg id op =
          !r
       )
   in
-  Redirector.push Redirector.parallel_queues id (Atomic op, task) ;
+  debug "Adding to %s queues" (redirector_as_string redirector) ;
+  Redirector.push redirector id (Atomic op, task) ;
   task
 
-and queue_atomics_and_wait ~progress_callback ~max_parallel_atoms dbg id ops =
+and queue_atomics_and_wait ~progress_callback ~max_parallel_atoms dbg id ops
+    redirector =
   let from = Updates.last_id dbg updates in
   Xenops_utils.chunks max_parallel_atoms ops
   |> List.mapi (fun chunk_idx ops ->
@@ -2385,7 +2394,9 @@ and queue_atomics_and_wait ~progress_callback ~max_parallel_atoms dbg id ops =
                let atom_id =
                  Printf.sprintf "%s.chunk=%d.atom=%d" id chunk_idx atom_idx
                in
-               (queue_atomic_int ~progress_callback dbg atom_id op, op)
+               ( queue_atomic_int ~progress_callback dbg atom_id op redirector
+               , op
+               )
              )
              ops
          in
