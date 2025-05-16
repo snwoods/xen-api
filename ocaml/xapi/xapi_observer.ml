@@ -448,17 +448,23 @@ end
 module SMObserverConfig = Dom0ObserverConfig (struct let component = SMApi end)
 
 let get_forwarder c =
+  debug "Getting forwarder" ;
   let module Forwarder =
     ( val match c with
           | Xapi ->
+              debug "Got xapi observer" ;
               (module Observer)
           | Xenopsd ->
+            debug "Got xenops observer" ;
               (module Xapi_xenops.Observer)
           | Xapi_clusterd ->
+              debug "Got cluster observer" ;
               (module Xapi_cluster.Observer)
           | SMApi ->
+              debug "Got smapi observer" ;
               (module SMObserverConfig)
           | Xapi_storage_script ->
+              debug "Got xapi_storage_script observer" ;
               (module Xapi_storage_script.Observer)
         : ObserverInterface
       )

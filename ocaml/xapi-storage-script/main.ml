@@ -1866,7 +1866,7 @@ module Observer = struct
     @@
     let* () =
       info (fun m ->
-          m "xapi-storage-script observer.create use_observer=%b"
+          m "xapi_storage_script observer.create use_observer=%b"
             config.use_observer
       )
     in
@@ -1878,7 +1878,7 @@ module Observer = struct
     @@
     let* () =
       info (fun m ->
-          m "xapi-storage-script observer.destroy use_observer=%b"
+          m "xapi_storage_script observer.destroy use_observer=%b"
             config.use_observer
       )
     in
@@ -1890,7 +1890,7 @@ module Observer = struct
     @@
     let* () =
       info (fun m ->
-          m "xapi-storage-script observer.set_enabled use_observer=%b"
+          m "xapi_storage_script observer.set_enabled use_observer=%b"
             config.use_observer
       )
     in
@@ -1904,7 +1904,7 @@ module Observer = struct
     let* () =
       info (fun m ->
           m
-            "xapi-storage-script observer.set_endpoints doing nothing \
+            "xapi_storage_script observer.set_endpoints doing nothing \
              use_observer=%b"
             config.use_observer
       )
