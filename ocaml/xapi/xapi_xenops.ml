@@ -4289,16 +4289,19 @@ let vusb_unplug ~__context ~self =
 
 module Observer = struct
   let create ~__context ~uuid ~name_label ~attributes ~endpoints ~enabled =
+    debug "Xenops fwder Observer.create %s" uuid ;
     let module Client = (val make_client (default_xenopsd ()) : XENOPS) in
     let dbg = Context.string_of_task __context in
     Client.Observer.create dbg uuid name_label attributes endpoints enabled
 
   let destroy ~__context ~uuid =
+    debug "Xenops fwder Observer.destroy %s" uuid ;
     let module Client = (val make_client (default_xenopsd ()) : XENOPS) in
     let dbg = Context.string_of_task __context in
     Client.Observer.destroy dbg uuid
 
   let set_enabled ~__context ~uuid ~enabled =
+    debug "Xenops fwder Observer.set_enabled %s" uuid ;
     let module Client = (val make_client (default_xenopsd ()) : XENOPS) in
     let dbg = Context.string_of_task __context in
     Client.Observer.set_enabled dbg uuid enabled
@@ -4309,6 +4312,7 @@ module Observer = struct
     Client.Observer.set_attributes dbg uuid attributes
 
   let set_endpoints ~__context ~uuid ~endpoints =
+    debug "Xenops fwder Observer.set_endpoints %s" uuid ;
     let module Client = (val make_client (default_xenopsd ()) : XENOPS) in
     let dbg = Context.string_of_task __context in
     Client.Observer.set_endpoints dbg uuid endpoints

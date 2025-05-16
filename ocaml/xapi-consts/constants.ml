@@ -409,7 +409,7 @@ let observer_component_xenopsd = "xenopsd"
 
 let observer_component_xapi_clusterd = "xapi-clusterd"
 
-let observer_component_smapi = "smapi"
+let observer_component_smapi = "smapiv1"
 
 let observer_component_xapi_storage_script = "smapiv3"
 

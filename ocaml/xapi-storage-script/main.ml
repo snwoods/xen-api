@@ -410,6 +410,24 @@ let observer_config_dir =
   in
   dir // component // "enabled"
 
+let observer_is_component_enabled () =
+  let is_enabled () =
+    let is_config_file path = Filename.check_suffix path ".observer.conf" in
+    let* files = Sys.readdir observer_config_dir in
+    Lwt.return (List.exists is_config_file files)
+  in
+  let* result = Deferred.try_with is_enabled in
+  let* () =
+      let result_as_string =
+        match Result.to_option result with
+        | Some b -> if b then "true" else "false"
+        | None -> "none" in
+      info (fun m ->
+          m "observer_is_component_enabled result=%s" result_as_string
+      )
+    in
+  Lwt.return (Option.value (Result.to_option result) ~default:false)
+
 (** Call the script named after the RPC method in the [script_dir]
     directory. The arguments (not the whole JSON-RPC call) are passed as JSON
     to its stdin, and stdout is returned. In case of a non-zero exit code,
@@ -455,7 +473,7 @@ let fork_exec_rpc :
         (List.map (fun (k, v) -> Printf.sprintf "(%s: %s)" k v) env)
     in
     let* () =
-      debug (fun m ->
+      info (fun m ->
           m "SMAPIv3 fork_exec_rpc script name=%s args=(%s) env=[%s]"
             script_name (String.concat ", " args) env_as_string
       )
@@ -1847,7 +1865,7 @@ module Observer = struct
     wrap
     @@
     let* () =
-      debug (fun m ->
+      info (fun m ->
           m "xapi-storage-script observer.create use_observer=%b"
             config.use_observer
       )
@@ -1859,7 +1877,7 @@ module Observer = struct
     wrap
     @@
     let* () =
-      debug (fun m ->
+      info (fun m ->
           m "xapi-storage-script observer.destroy use_observer=%b"
             config.use_observer
       )
@@ -1871,7 +1889,7 @@ module Observer = struct
     wrap
     @@
     let* () =
-      debug (fun m ->
+      info (fun m ->
           m "xapi-storage-script observer.set_enabled use_observer=%b"
             config.use_observer
       )
@@ -1884,7 +1902,7 @@ module Observer = struct
     wrap
     @@
     let* () =
-      debug (fun m ->
+      info (fun m ->
           m
             "xapi-storage-script observer.set_endpoints doing nothing \
              use_observer=%b"
@@ -2303,6 +2321,7 @@ let () =
   Logs.set_reporter (lwt_reporter ()) ;
   Logs.set_level ~all:true (Some Logs.Info) ;
   let main =
+    let* _ = observer_is_component_enabled () in
     if !self_test_only then
       self_test ~root_dir:!root_dir
     else
