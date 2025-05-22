@@ -380,12 +380,5 @@ module LocalAPI (R : RPC) = struct
         (debug_info_p @-> timeout_p @-> returning result_p err)
   end
 
-  module Observer =
-    Observer_helpers.ObserverAPI
-      (R)
-      (struct
-        type comp_error = error
-
-        let err = err
-      end)
+  module Observer = Observer_helpers.ObserverAPI (R)
 end

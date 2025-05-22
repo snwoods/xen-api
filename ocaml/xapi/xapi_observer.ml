@@ -379,6 +379,29 @@ end
 
 module SMObserverConfig = Dom0ObserverConfig (struct let component = SMApi end)
 
+module SMObserver = struct
+  include SMObserverConfig
+  open Storage_client
+
+  let create ~__context ~uuid ~name_label ~attributes ~endpoints ~enabled =
+    debug "SMObserver Observer.create %s" uuid ;
+    SMObserverConfig.create ~__context ~uuid ~name_label ~attributes ~endpoints ~enabled ;
+    let dbg = Context.string_of_task __context in
+    ObserverClient.create dbg uuid name_label attributes endpoints enabled
+
+  let destroy ~__context ~uuid =
+    debug "SMObserver Observer.destroy %s" uuid ;
+    SMObserverConfig.destroy ~__context ~uuid ;
+    let dbg = Context.string_of_task __context in
+    ObserverClient.destroy dbg uuid
+
+  let set_enabled ~__context ~uuid ~enabled =
+    debug "SMObserver Observer.set_enabled %s" uuid ;
+    SMObserverConfig.set_enabled ~__context ~uuid ~enabled ;
+    let dbg = Context.string_of_task __context in
+    ObserverClient.set_enabled dbg uuid enabled
+end
+
 let get_forwarder c =
   let module Forwarder =
     ( val match c with
@@ -389,7 +412,7 @@ let get_forwarder c =
           | Xapi_clusterd ->
               (module Xapi_cluster.Observer)
           | SMApi ->
-              (module SMObserverConfig)
+              (module SMObserver)
         : ObserverInterface
       )
   in

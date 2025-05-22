@@ -35,3 +35,18 @@ module Client = Storage_interface.StorageAPI (Idl.Exn.GenClient (struct
             Storage_interface.uri call
     )
 end))
+
+module ObserverClient = Observer_helpers.ObserverAPI
+  (Idl.Exn.GenClient (struct
+    let rpc call =
+      retry_econnrefused (fun () ->
+          (* Hardcoded for testing *)
+          let queue_name = (Xcp_service.common_prefix ^ ".smapiv3-observer") in
+          if !use_switch then
+            json_switch_rpc queue_name call
+          else
+            (* Hardcoded for testing *)
+            xml_http_rpc ~srcstr:(get_user_agent ()) ~dststr:queue_name
+              (fun () -> "file:/var/lib/xcp/storage.d/smapiv3-observer") call
+      )
+  end))

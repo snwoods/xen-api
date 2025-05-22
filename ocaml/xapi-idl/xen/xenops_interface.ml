@@ -1146,12 +1146,5 @@ module XenopsAPI (R : RPC) = struct
         (debug_info_p @-> unit_p @-> returning unit_p err)
   end
 
-  module Observer =
-    Observer_helpers.ObserverAPI
-      (R)
-      (struct
-        type comp_error = Errors.error
-
-        let err = err
-      end)
+  module Observer = Observer_helpers.ObserverAPI (R)
 end
