@@ -42,6 +42,7 @@
    xapi-idl
    xapi-idl.storage.interface
    clock
+   xapi-log
  )
  (wrapped false))
 

@@ -14,6 +14,8 @@
 
 open Storage_interface
 open Xcp_client
+module D = Debug.Make (struct let name = service_name end)
+open D
 
 let rec retry_econnrefused f =
   try f () with
@@ -28,11 +30,15 @@ let rec retry_econnrefused f =
 module Client = Storage_interface.StorageAPI (Idl.Exn.GenClient (struct
   let rpc call =
     retry_econnrefused (fun () ->
-        if !use_switch then
+        info "storage_client Client" ;
+        if !use_switch then (
+          info "Client json_switch_rpc" ;
           json_switch_rpc !queue_name call
-        else
+        ) else (
+          info "Client xml_http_rpc" ;
           xml_http_rpc ~srcstr:(get_user_agent ()) ~dststr:"storage"
             Storage_interface.uri call
+        )
     )
 end))
 
@@ -40,13 +46,17 @@ module ObserverClient = Observer_helpers.ObserverAPI
   (Idl.Exn.GenClient (struct
     let rpc call =
       retry_econnrefused (fun () ->
+          info "storage_client ObserverClient" ;
           (* Hardcoded for testing *)
           let queue_name = (Xcp_service.common_prefix ^ ".smapiv3-observer") in
-          if !use_switch then
+          if !use_switch then (
+            info "ObserverClient json_switch_rpc" ;
             json_switch_rpc queue_name call
-          else
+          ) else (
+            info "ObserverClient xml_http_rpc" ;
             (* Hardcoded for testing *)
             xml_http_rpc ~srcstr:(get_user_agent ()) ~dststr:queue_name
               (fun () -> "file:/var/lib/xcp/storage.d/smapiv3-observer") call
+          )
       )
   end))

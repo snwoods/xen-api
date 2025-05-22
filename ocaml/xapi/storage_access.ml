@@ -270,6 +270,7 @@ let bind ~__context ~pbd =
     let service = make_service uuid ty in
     System_domains.register_service service queue_name ;
     let info = Client.Query.query dbg in
+    D.info "storage_access rpc, queue_name=%s, uri=%s, %s" queue_name (uri ()) (uri ());
     Storage_mux_reg.register
       (Storage_interface.Sr.of_string sr_uuid)
       rpc uuid info ;
