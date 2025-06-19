@@ -1774,27 +1774,22 @@ let rec atomics_of_operation = function
         let name_multi = pf "VBDs.activate_and_plug %s" typ in
         let name_one = pf "VBD.activate_and_plug %s" typ in
         parallel_map name_multi ~id vbds (fun vbd ->
-            serial name_one ~id
-              [VBD_set_active (vbd.Vbd.id, true); vbd_plug vbd.Vbd.id]
+            (* When migrating, attach early if the vbd's SM allows it *)
+            if
+              migration
+              && (not !xenopsd_vbd_plug_unplug_legacy)
+              && vbd.Vbd.can_attach_early
+            then
+              [VBD_activate vbd.Vbd.id]
+            else
+              serial name_one ~id
+                [VBD_set_active (vbd.Vbd.id, true); vbd_plug vbd.Vbd.id]
         )
-      in
-      let activate_vbds typ vbds =
-        let name_multi = Printf.sprintf "VBDs.activate %s" typ in
-        parallel name_multi ~id
-          (List.map (fun vbd -> VBD_activate vbd.Vbd.id) vbds)
-      in
-      let prep_vbds =
-        if !xenopsd_vbd_plug_unplug_legacy || not migration then
-          plug_vbds
-        else
-          (* If plug is split into activate and attach, when migrating we don't
-             need to attach here as we attached outside of the VM downtime *)
-          activate_vbds
       in
       [
         (* rw vbds must be plugged before ro vbds, see vbd_plug_sets *)
-        prep_vbds "RW" vbds_rw
-      ; prep_vbds "RO" vbds_ro
+        plug_vbds "RW" vbds_rw
+      ; plug_vbds "RO" vbds_ro
       ; (if restore_vifs then atomics_of_operation (VM_restore_vifs id) else [])
       ; (* Nvidia SRIOV PCI devices have been already been plugged *)
         parallel_map "VGPUs.activate" ~id vgpus (fun vgpu ->
