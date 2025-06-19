@@ -684,6 +684,20 @@ module MD = struct
       ) else
         disk_of_vdi ~__context ~self:vbd.API.vBD_VDI
     in
+    let can_attach_early =
+      let vdi = vbd.API.vBD_VDI in
+      let sr = Db.VDI.get_SR ~__context ~self:vdi in
+      let sr_type = Db.SR.get_type ~__context ~self:sr in
+      let expr =
+        Xapi_database.Db_filter_types.(Eq (Field "type", Literal sr_type))
+      in
+      match Db.SM.get_records_where ~__context ~expr with
+      | (_, sm) :: _ ->
+          Version.String.ge sm.API.sM_required_api_version "3.0"
+      | [] ->
+          warn "Couldn't find SM with type %s" sr_type ;
+          false
+    in
     {
       id= (vm.API.vM_uuid, Device_number.to_linux_device device_number)
     ; position= Some device_number
@@ -707,6 +721,7 @@ module MD = struct
         ( try Db.VDI.get_on_boot ~__context ~self:vbd.API.vBD_VDI = `persist
           with _ -> true
         )
+    ; can_attach_early
     }
 
   let of_pvs_proxy ~__context vif proxy =
