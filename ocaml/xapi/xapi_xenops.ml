@@ -535,6 +535,9 @@ let list_net_sriov_vf_pcis ~__context ~vm =
              None
      )
 
+module StringMap = Map.Make(String)
+let sr_version_cache = ref StringMap.empty
+
 module MD = struct
   (** Convert between xapi DB records and xenopsd records *)
 
@@ -665,16 +668,21 @@ module MD = struct
       ) else
         disk_of_vdi ~__context ~self:vbd.API.vBD_VDI
     in
-    (* This Map needs to be made somewhere else *)
-    (*HM what key are we using? sr is a ref*)
     let can_attach_early =
       let vdi = vbd.API.vBD_VDI in
       let sr = Db.VDI.get_SR ~__context ~self:vdi in
-      match Xapi_sr.required_api_version_of_sr_internal ~__context ~sr with
-      | Some api_version ->
-          Version.String.ge api_version "3.0"
+      let sr_key = Ref.string_of sr in
+      match StringMap.find_opt sr_key !sr_version_cache with
+      | Some cached_api_version ->
+        Version.String.ge cached_api_version "3.0"
       | None ->
-          false
+        match Xapi_sr.required_api_version_of_sr_internal ~__context ~sr with
+        | Some api_version -> (
+            sr_version_cache := StringMap.add sr_key api_version !sr_version_cache ;
+            Version.String.ge api_version "3.0"
+        )
+        | None ->
+            false
     in
     {
       id= (vm.API.vM_uuid, Device_number.to_linux_device device_number)
