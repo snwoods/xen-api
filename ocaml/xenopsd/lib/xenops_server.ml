@@ -1774,6 +1774,7 @@ let rec atomics_of_operation = function
         let name_multi = pf "VBDs.activate_and_plug %s" typ in
         let name_one = pf "VBD.activate_and_plug %s" typ in
         parallel_map name_multi ~id vbds (fun vbd ->
+            (*TODO print vbd id*)
             (* When migrating, attach early if the vbd's SM allows it *)
             if
               migration
@@ -3031,6 +3032,7 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
           ( try
               let no_sharept = VGPU_DB.vgpus id |> List.exists is_no_sharept in
               debug "VM %s no_sharept=%b (%s)" id no_sharept __LOC__ ;
+              (* TODO check can_early_attach for vbd? *)
               let early_attach =
                 if !xenopsd_vbd_plug_unplug_legacy then
                   []

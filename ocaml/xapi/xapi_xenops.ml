@@ -665,18 +665,15 @@ module MD = struct
       ) else
         disk_of_vdi ~__context ~self:vbd.API.vBD_VDI
     in
+    (* This Map needs to be made somewhere else *)
+    (*HM what key are we using? sr is a ref*)
     let can_attach_early =
       let vdi = vbd.API.vBD_VDI in
       let sr = Db.VDI.get_SR ~__context ~self:vdi in
-      let sr_type = Db.SR.get_type ~__context ~self:sr in
-      let expr =
-        Xapi_database.Db_filter_types.(Eq (Field "type", Literal sr_type))
-      in
-      match Db.SM.get_records_where ~__context ~expr with
-      | (_, sm) :: _ ->
-          Version.String.ge sm.API.sM_required_api_version "3.0"
-      | [] ->
-          warn "Couldn't find SM with type %s" sr_type ;
+      match Xapi_sr.required_api_version_of_sr_internal ~__context ~sr with
+      | Some api_version ->
+          Version.String.ge api_version "3.0"
+      | None ->
           false
     in
     {
