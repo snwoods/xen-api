@@ -553,6 +553,10 @@ let list_net_sriov_vf_pcis ~__context ~vm =
              None
      )
 
+module StringMap = Map.Make (String)
+
+let sr_version_cache = ref StringMap.empty
+
 module MD = struct
   (** Convert between xapi DB records and xenopsd records *)
 
@@ -687,16 +691,19 @@ module MD = struct
     let can_attach_early =
       let vdi = vbd.API.vBD_VDI in
       let sr = Db.VDI.get_SR ~__context ~self:vdi in
-      let sr_type = Db.SR.get_type ~__context ~self:sr in
-      let expr =
-        Xapi_database.Db_filter_types.(Eq (Field "type", Literal sr_type))
-      in
-      match Db.SM.get_records_where ~__context ~expr with
-      | (_, sm) :: _ ->
-          Version.String.ge sm.API.sM_required_api_version "3.0"
-      | [] ->
-          warn "Couldn't find SM with type %s" sr_type ;
-          false
+      let sr_key = Ref.string_of sr in
+      match StringMap.find_opt sr_key !sr_version_cache with
+      | Some cached_api_version ->
+          Version.String.ge cached_api_version "3.0"
+      | None -> (
+        match Xapi_sr.required_api_version_of_sr ~__context ~sr with
+        | Some api_version ->
+            sr_version_cache :=
+              StringMap.add sr_key api_version !sr_version_cache ;
+            Version.String.ge api_version "3.0"
+        | None ->
+            false
+      )
     in
     {
       id= (vm.API.vM_uuid, Device_number.to_linux_device device_number)

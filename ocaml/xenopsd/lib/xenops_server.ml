@@ -1774,7 +1774,13 @@ let rec atomics_of_operation = function
         let name_multi = pf "VBDs.activate_and_plug %s" typ in
         let name_one = pf "VBD.activate_and_plug %s" typ in
         parallel_map name_multi ~id vbds (fun vbd ->
-            (* When migrating, attach early if the vbd's SM allows it *)
+            (** When migrating, attach early if the vbd's SM allows it.
+              Note: there is a bug here for SxM if migrating between API
+              versions as the Vbd's new SR won't have propagated to xenopsd
+              yet. This means can_attach_early will be based on the origin SR.
+              This is a non-issue as v1 <-> v3 migration is still experimental
+              and v1 is already early-attaching in SxM through mirroring.
+              *)
             if
               migration
               && (not !xenopsd_vbd_plug_unplug_legacy)
@@ -3031,20 +3037,21 @@ and perform_exn ?result (op : operation) (t : Xenops_task.task_handle) : unit =
           ( try
               let no_sharept = VGPU_DB.vgpus id |> List.exists is_no_sharept in
               debug "VM %s no_sharept=%b (%s)" id no_sharept __LOC__ ;
+              (* If plug is split into activate and attach, we could attach
+                early so that it is outside of the VM downtime (if the SM
+                supports this) *)
               let early_attach =
-                if !xenopsd_vbd_plug_unplug_legacy then
-                  []
-                else
-                  (* If plug is split into activate and attach, we can attach
-                     early so that it is outside of the VM downtime *)
-                  parallel_map "VBDs.set_active_and_attach" ~id (VBD_DB.vbds id)
-                    (fun vbd ->
+                parallel_map "VBDs.set_active_and_attach" ~id (VBD_DB.vbds id)
+                  (fun vbd ->
+                    if not !xenopsd_vbd_plug_unplug_legacy && vbd.Vbd.can_attach_early then
                       serial "VBD.set_active_and_attach" ~id
                         [
                           VBD_set_active (vbd.Vbd.id, true)
                         ; VBD_attach vbd.Vbd.id
                         ]
-                  )
+                    else
+                      []
+                )
               in
               perform_atomics
                 ([VM_create (id, Some memory_limit, Some final_id, no_sharept)]
