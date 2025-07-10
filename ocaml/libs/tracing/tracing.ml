@@ -24,9 +24,11 @@ let failures = Atomic.make 0
 
 let not_throttled () =
   let old = Atomic.fetch_and_add failures 1 in
-  old < 2
+  let result = old < 2 in
+  info "not_throttled=%b old=%d" result old ;
+  result
 
-let reset_throttled () = Atomic.set failures 0
+let reset_throttled () = info "Resetting throttled" ; Atomic.set failures 0
 
 module W3CBaggage = struct
   module Key = struct
@@ -307,6 +309,7 @@ module Span = struct
     ; links: SpanLink.t list
     ; events: SpanEvent.t list
     ; attributes: string Attributes.t
+    ; depth: int
   }
 
   let compare span1 span2 =
@@ -322,14 +325,21 @@ module Span = struct
 
   let start ?(attributes = Attributes.empty)
       ?(trace_context : TraceContext.t option) ~name ~parent ~span_kind () =
-    let trace_id, extra_context =
+    let trace_id, extra_context, depth =
       match parent with
       | None ->
-          (Trace_id.make (), TraceContext.empty)
+          (Trace_id.make (), TraceContext.empty, 1)
       | Some span_parent ->
-          (span_parent.context.trace_id, span_parent.context.trace_context)
+          ( span_parent.context.trace_id
+          , span_parent.context.trace_context
+          , span_parent.depth + 1
+          )
     in
     let span_id = Span_id.make () in
+    let parent_name = Option.fold ~none:"None" ~some:(fun p -> p.name) parent in
+    info "new span %s: depth=%d, parent=%s (%s : %s)" name depth parent_name
+      (Trace_id.to_string trace_id)
+      (Span_id.to_string span_id) ;
     let context : SpanContext.t =
       {trace_id; span_id; trace_context= extra_context}
     in
@@ -356,6 +366,7 @@ module Span = struct
     ; links
     ; events
     ; attributes
+    ; depth
     }
 
   let get_tag t tag = Attributes.find tag t.attributes
@@ -374,6 +385,8 @@ module Span = struct
 
   let get_attributes span =
     Attributes.fold (fun k v tags -> (k, v) :: tags) span.attributes []
+
+  let get_depth_as_attribute span = [("span.depth", string_of_int span.depth)]
 
   let finish ?(attributes = Attributes.empty) ~span () =
     let attributes =
@@ -485,23 +498,25 @@ module Spans = struct
     | None ->
         if TraceMap.cardinal spans < Atomic.get max_traces then
           TraceMap.add key (SpanMap.singleton span.context.span_id span) spans
-        else (
-          if not_throttled () then
+        else
+          let result = not_throttled () in
+          if result then
             debug "%s exceeded max traces when adding to span table"
               __FUNCTION__ ;
+          debug "Exceeded max traces and not_throttled=%b" result ;
           spans
-        )
     | Some span_list ->
         if SpanMap.cardinal span_list < Atomic.get max_spans then
           TraceMap.add key
             (SpanMap.add span.context.span_id span span_list)
             spans
-        else (
-          if not_throttled () then
-            debug "%s exceeded max traces when adding to span table"
+        else
+          let result = not_throttled () in
+          if result then
+            debug "%s exceeded max traces when adding to span table (span??)"
               __FUNCTION__ ;
+          debug "Exceeded max spans and not_throttled=%b" result ;
           spans
-        )
 
   let add_to_spans ~span = update_spans add_to_spans_unlocked span
 
@@ -509,8 +524,10 @@ module Spans = struct
     let key = span.Span.context.trace_id in
     match TraceMap.find_opt key spans with
     | None ->
-        if not_throttled () then
+        let result = not_throttled () in
+        if result then
           debug "%s span does not exist or already finished" __FUNCTION__ ;
+        debug "span does not exist and not_throttled=%b" result ;
         spans
     | Some span_list ->
         let span_list = SpanMap.remove span.Span.context.span_id span_list in
@@ -535,6 +552,9 @@ module Spans = struct
       )
     else if not_throttled () then
       debug "%s exceeded max traces when adding to finished span table"
+        __FUNCTION__
+    else
+      debug "%s exceeded max traces finished span table but not_throttled=false"
         __FUNCTION__
 
   let mark_finished span = Option.iter add_to_finished (remove_from_spans span)
@@ -713,32 +733,46 @@ module Tracer = struct
   let get_tracer ~name:_ = TracerProvider.get_current ()
 
   let span_of_span_context context name : Span.t =
+    info "span_of_span_context %s depth=1" name ;
     {
       context
     ; status= {status_code= Status.Unset; _description= None}
     ; name
     ; parent= None
-    ; span_kind= SpanKind.Client (* This will be the span of the client call*)
+    ; span_kind= SpanKind.Client (* This will be the span of the client call *)
     ; begin_time= Unix.gettimeofday ()
     ; end_time= None
     ; links= []
     ; events= []
     ; attributes= Attributes.empty
+    ; depth= 1
     }
 
   let start ~tracer:t ?(attributes = []) ?trace_context
       ?(span_kind = SpanKind.Internal) ~name ~parent () :
       (Span.t option, exn) result =
+    info "Entered Tracer.start for %s" name ;
     let open TracerProvider in
-    (* Do not start span if the TracerProvider is disabled*)
+    (* Do not start span if the TracerProvider is disabled *)
     if not t.enabled then
       ok_none
-    else
+    else if
+      (* Do not start span if the max depth has been reached *)
+      Option.fold ~none:false
+        ~some:(fun parent -> parent.Span.depth >= 10)
+        parent
+    then (
+      info "Depth limit reached, parent depth=%d" (Option.get parent).Span.depth ;
+      ok_none
+    ) else (
+      info "Depth limit not reached, parent depth=%d"
+        (Option.fold ~none:0 ~some:(fun parent -> parent.Span.depth) parent) ;
       let attributes = Attributes.merge_into t.attributes attributes in
       let span =
         Span.start ~attributes ?trace_context ~name ~parent ~span_kind ()
       in
       Spans.add_to_spans ~span ; Ok (Some span)
+    )
 
   let update_span_with_parent span (parent : Span.t option) =
     if (TracerProvider.get_current ()).enabled then

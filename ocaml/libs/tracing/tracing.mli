@@ -151,6 +151,8 @@ module Span : sig
 
   val get_attributes : t -> (string * string) list
 
+  val get_depth_as_attribute : t -> (string * string) list
+
   val to_propagation_context : t -> TraceContext.t
 
   val with_trace_context : t -> TraceContext.t -> t
