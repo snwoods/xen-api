@@ -482,9 +482,15 @@ module Spans = struct
 
   let set_max_spans x = Atomic.set max_spans x
 
-  let max_traces = Atomic.make 1000
+  (* let max_traces = Atomic.make 1000 *)
+  (* Use 10 for now for testing, the default should be much higher *)
+  let max_traces = Atomic.make 10
 
   let set_max_traces x = Atomic.set max_traces x
+
+  let max_depth = Atomic.make 100
+
+  let set_max_depth x = Atomic.set max_depth x
 
   let finished_spans = Atomic.make ([], 0)
 
@@ -759,7 +765,7 @@ module Tracer = struct
     else if
       (* Do not start span if the max depth has been reached *)
       Option.fold ~none:false
-        ~some:(fun parent -> parent.Span.depth >= 10)
+        ~some:(fun parent -> parent.Span.depth >= (Atomic.get Spans.max_depth))
         parent
     then (
       info "Depth limit reached, parent depth=%d" (Option.get parent).Span.depth ;

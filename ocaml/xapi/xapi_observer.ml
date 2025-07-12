@@ -588,6 +588,9 @@ let initialise_observer_meta ~__context component =
   set_max_spans ~__context !Xapi_globs.max_spans component ;
   set_max_traces ~__context !Xapi_globs.max_traces component ;
   set_max_file_size ~__context !Xapi_globs.max_observer_file_size component ;
+  (* TODO I guess we need it per component? Kinda annoying. Wait to see
+    if it works with hardcoded 10 first. *)
+  (* set_max_depth ~__context !Xapi_globs.max_depth component ; *)
   set_host_id ~__context (Helpers.get_localhost_uuid ()) component ;
   set_compress_tracing_files ~__context
     !Xapi_globs.compress_tracing_files
