@@ -83,6 +83,8 @@ module TraceContext : sig
 
   val empty : t
 
+  val depth_key : string
+
   type traceparent = string
 
   type baggage = (string * string) list
@@ -164,6 +166,8 @@ module Spans : sig
   val set_max_spans : int -> unit
 
   val set_max_traces : int -> unit
+
+  val set_max_depth : int -> unit
 
   val span_count : unit -> int
 
