@@ -107,19 +107,7 @@ let assert_safe_to_reenable ~__context ~self ~user_request =
       (fun self ->
         Xapi_pbd.abort_if_storage_attached_to_protected_vms ~__context ~self
       )
-      unplugged_pbds ;
-    let pifs = Db.Host.get_PIFs ~__context ~self in
-    let unplugged_pifs =
-      List.filter
-        (fun pif -> not (Db.PIF.get_currently_attached ~__context ~self:pif))
-        pifs
-    in
-    (* Make sure it is 'ok' to have these PIFs remain unplugged *)
-    List.iter
-      (fun self ->
-        Xapi_pif.abort_if_network_attached_to_protected_vms ~__context ~self
-      )
-      unplugged_pifs
+      unplugged_pbds
   )
 
 (* The maximum pool size allowed must be restricted to 3 hosts for the pool which does not have Pool_size feature *)

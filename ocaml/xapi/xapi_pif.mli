@@ -280,11 +280,6 @@ val assert_no_protection_enabled :
   __context:Context.t -> self:[`PIF] Ref.t -> unit
 (** Ensure neither HA nor the general redo-log are enabled. *)
 
-val abort_if_network_attached_to_protected_vms :
-  __context:Context.t -> self:[`PIF] Ref.t -> unit
-(** Ensure the Network attached to the given PIF has not VIFs on it
- *  belonging to VMs that are protected by HA. *)
-
 val assert_no_other_local_pifs :
   __context:Context.t -> host:[`host] Ref.t -> network:[`network] Ref.t -> unit
 (** Ensure none of the PIFs on the given host are on the given network. *)

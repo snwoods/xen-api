@@ -352,36 +352,6 @@ let assert_no_sriov ~__context ~self =
   | _ ->
       ()
 
-let abort_if_network_attached_to_protected_vms ~__context ~self =
-  (* Abort a PIF.unplug if the Network
-     	 * has VIFs connected to protected VMs *)
-  let pool = Helpers.get_pool ~__context in
-  if
-    Db.Pool.get_ha_enabled ~__context ~self:pool
-    && not (Db.Pool.get_ha_allow_overcommit ~__context ~self:pool)
-  then
-    let net = Db.PIF.get_network ~__context ~self in
-    let vifs = Db.Network.get_VIFs ~__context ~self:net in
-    let vms = List.map (fun vif -> Db.VIF.get_VM ~__context ~self:vif) vifs in
-    List.iter
-      (fun vm ->
-        if Helpers.is_xha_protected ~__context ~self:vm then (
-          let vm = Ref.string_of vm in
-          let pif = Ref.string_of self in
-          let net = Ref.string_of net in
-          info
-            "The protected VM %s must remain agile and blocked the operation. \
-             PIF %s must be plugged this. This happened because network %s is \
-             used by both the VM and the PIF"
-            vm pif net ;
-          raise
-            Api_errors.(
-              Server_error (ha_constraint_violation_network_not_shared, [net])
-            )
-        )
-      )
-      vms
-
 let assert_no_other_local_pifs ~__context ~host ~network =
   let other_pifs =
     Db.PIF.get_refs_where ~__context
@@ -1044,9 +1014,6 @@ let rec unplug ~__context ~self =
   assert_no_protection_enabled ~__context ~self ;
   assert_not_management_pif ~__context ~self ;
   let pif_rec = Db.PIF.get_record ~__context ~self in
-  let host = pif_rec.API.pIF_host in
-  if Db.Host.get_enabled ~__context ~self:host then
-    abort_if_network_attached_to_protected_vms ~__context ~self ;
   let network = Db.PIF.get_network ~__context ~self in
   Xapi_network_attach_helpers.assert_network_has_no_vifs_in_use_on_me ~__context
     ~host:(Helpers.get_localhost ~__context)
